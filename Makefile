@@ -4,6 +4,7 @@ FFLAGS	  := -O
 BINFOLDER := bin
 WORKSPACE := tmp
 
+
 lib	:= lib$(name).a
 libpath := xtt-lib
 libsrc  := elliptic_tools.f90\

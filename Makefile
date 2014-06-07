@@ -4,52 +4,60 @@ FFLAGS	  := -O
 BINFOLDER := bin
 WORKSPACE := tmp
 
-
-lib	:= lib$(name).a
-libpath := xtt-lib
+libsuf := .lib
+libfdr := xtt-lib
 libsrc  := elliptic_tools.f90\
 	   field_tools.f90\
 	   constants.f90
+libobj := $(addprefix $(WORKSPACE)/,$(libsrc:.f90=$(libsuf)))
+libsrc := $(addprefix $(libfdr)/,$(libsrc))
 
-libobj	:= $(addprefix $(WORKSPACE)/,$(libsrc:.f90=.lib.out))
-libsrc	:= $(addprefix $(libpath)/,$(libsrc))
+libfile := $(WORKSPACE)/lib$(name).a
+libfile_dep := $(libfile)($(notdir $(libobj)))
 
-srcpath := src
+
+suf := .o
+fdr := src
 src	:= diagnose-real_data.f90\
 	   diagnose-dry_test.f90\
 	   diagnose-whs.f90
-
-obj	:= $(addprefix $(WORKSPACE)/,$(src:.f90=.out))
-src := $(addprefix $(srcpath)/,$(src))
-
-
+obj	:= $(addprefix $(WORKSPACE)/,$(src:.f90=$(suf)))
+src := $(addprefix $(fdr)/,$(src))
 
 .PHONY : all
+all: | mkdir $(libfile_dep) main
 
-all: mkdir $(libobj) $(obj)
-	mv *.out $(BINFOLDER)
-	mv $(lib) $(BINFOLDER)
-
+.PHONY : mkdir
 mkdir:
 	mkdir $(WORKSPACE)
 	mkdir $(BINFOLDER)
 
-$(WORKSPACE)/%.lib.out : $(libpath)/%.f90
-	@echo "Making making " $@
-	$(FC) $(FFLAGS) -c $@
+$(libfile_dep): $(libobj)
+	ar -crs $@ $^
 
-$(WORKSPACE)/%.out : $(srcpath)/%.f90 $(libobj)
-	@echo "Now making " $@
-	$(FC) $(FFLAGS) -c -o $@ $?
+
+.PHONY : main
+main: $(obj)
+	for filename in $^; do \
+		echo $${filename}; \
+		mv $${filename} $(BINFOLDER)/; \
+	done
+
+
+
+
+$(WORKSPACE)/%$(libsuf): $(libfdr)/%.f90
+	$(FC) $(FFLAGES) -c -o $@ $<
+
+$(WORKSPACE)/%$(suf): $(fdr)/%.f90
+	$(FC) $(FFLAGES) -o $@ $< $(libfile)
+
 
 
 .PHONY : clean
 
 clean:
-	-rm -f *.o
-	-rm -f *.out
-	-rm -f *.mod
-	-rm -f $(lib)
+	-rm *.mod
 	-rm -r $(BINFOLDER)
 	-rm -r $(WORKSPACE)
 

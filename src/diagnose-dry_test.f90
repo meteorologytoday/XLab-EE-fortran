@@ -5,13 +5,14 @@ use constants
 implicit none
 
 integer        :: nr, nz
-character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, output_file, use_previous_relaxation, previous_path
+character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, output_file, yes_or_no, previous_path, chi_bc_file, psi_bc_file
 
 real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q(:,:), coe(:, :, :),    &
 &                     a(:,:), b(:,:), c(:,:), workspace(:,:),              &
 &                     aa(:,:), bb(:,:), cc(:,:), JJ(:,:),                  &
-&                     w_mom(:,:), theta(:,:), eta(:,:), eta_tmp(:,:),          &
-&                     ra(:), za(:), exner(:), sigma(:), dthetadr(:,:)
+&                     w_mom(:,:), theta(:,:), eta(:,:), eta_tmp(:,:),      &
+&                     ra(:), za(:), exner(:), sigma(:), dthetadr(:,:),     &
+&                     psi_bc(:,:), chi_bc(:,:)
 
 real(4)            :: testing_dt, Lr, Lz, dr, dz, eta_avg_b, eta_avg_nob
 
@@ -20,10 +21,10 @@ real(4) :: p_strategy_r, strategy_r
 
 integer :: i,j, m, n, err
 real(4) :: r, z, eta_avg, sigmaa, tmp1, tmp2, tmp3
-logical :: use_previous, file_exists
+logical :: use_previous, file_exists, use_chi_bc, use_psi_bc
 
-read(*,'(a)') use_previous_relaxation
-if(use_previous_relaxation == 'yes') then
+read(*,'(a)') yes_or_no
+if(yes_or_no == 'yes') then
     read(*,'(a)') previous_path
     use_previous = .true.
 else
@@ -38,10 +39,24 @@ read(*,'(a)') B_file;
 read(*,'(a)') C_file;
 read(*,'(a)') Q_file;
 read(*,*) p_strategy, p_strategy_r, max_iter;
+read(*, '(a)') yes_or_no
+if(yes_or_no == 'yes') then
+    read(*,'(a)') psi_bc_file
+    use_psi_bc = .true.
+else
+    use_psi_bc = .false.
+end if
+read(*, '(a)') yes_or_no
+if(yes_or_no == 'yes') then
+    read(*,'(a)') chi_bc_file
+    use_chi_bc = .true.
+else
+    use_chi_bc = .false.
+end if
 
 
-print *, "Use previous relaxation: ", merge('Y', 'N', use_previous .eqv. .true.)
-print *, "Previous folder: ", trim(previous_path)
+
+print *, "Use previous relaxation: ", merge('Y'//'('// trim(previous_path) //')', 'N', use_previous .eqv. .true.)
 print *, "Testing time: ", testing_dt
 print *, "Lr:", Lr, ", Lz:", Lz
 print *, "nr:", nr, ", nz:", nz
@@ -54,6 +69,9 @@ print *, "Q file: ", trim(Q_file)
 print *, "Strategy wanted: ", p_strategy
 print *, "Strategy specific value: ", p_strategy_r
 print *, "Strategy max iteration: ", max_iter
+print *, "Use PSI boundary condition: ", merge('Y'//'('//trim(psi_bc_path)//')', 'N', use_psi_bc .eqv. .true.)
+print *, "Use CHI boundary condition: ", merge('Y'//'('//trim(chi_bc_path)//')', 'N', use_chi_bc .eqv. .true.)
+
 
 allocate(psi(nr,nz));   allocate(chi(nr,nz));      allocate(eta(nr-1,nz));
 allocate(f(nr,nz));     allocate(Q(nr-1,nz));      allocate(JJ(nr-1,nz));
@@ -64,6 +82,22 @@ allocate(aa(nr-1, nz-2));allocate(bb(nr-1, nz-1));allocate(cc(nr-2, nz-1));
 allocate(w_mom(nr-1,nz));   allocate(theta(nr-1,nz));  allocate(eta(nr-1,nz));
 allocate(ra(nr));       allocate(za(nz));          allocate(sigma(nz));
 allocate(exner(nz));    allocate(dthetadr(nr-1,nz));
+
+call read_2Dfield(15, trim(input_folder)//"/"//A_file, a, nr-1, nz-2)
+call read_2Dfield(15, trim(input_folder)//"/"//B_file, b, nr-1, nz-1)
+call read_2Dfield(15, trim(input_folder)//"/"//C_file, c, nr-2, nz-1)
+call read_2Dfield(15, trim(input_folder)//"/"//Q_file, Q, nr-1, nz  )
+
+if(use_psi_bc .eqv. .true.) then
+    allocate(psi_bc(nr,nz));
+    call read_2Dfield(15, trim(input_folder)//"/"//psi_bc_file, psi_bc, nr, nz)
+end if
+
+
+if(use_chi_bc .eqv. .true.) then
+    allocate(chi_bc(nr,nz));
+    call read_2Dfield(15, trim(input_folder)//"/"//chi_bc_file, chi_bc, nr, nz)
+end if
 
 dr = Lr / (nr-1); dz = Lz / (nz-1);
 ! assign x and y
@@ -77,10 +111,6 @@ do j=1,nz
     exner(j) = 1.0 - za(j) / h0
     sigma(j) = p0 / (theta0 * Rd) * exner(j)**(1.0 / kappa - 1.0)
 end do
-call read_2Dfield(15, trim(input_folder)//"/"//A_file, a, nr-1, nz-2)
-call read_2Dfield(15, trim(input_folder)//"/"//B_file, b, nr-1, nz-1)
-call read_2Dfield(15, trim(input_folder)//"/"//C_file, c, nr-2, nz-1)
-call read_2Dfield(15, trim(input_folder)//"/"//Q_file, Q, nr-1, nz  )
 
 
 
@@ -140,7 +170,11 @@ if(file_exists .eqv. .true.) then
     print *, "Using previous psi.bin..."
     call read_2Dfield(15, trim(previous_path)//'/psi.bin', psi, nr, nz)
 else
-    psi = 0.0;
+    psi = 0.0
+end if
+
+if(use_psi_bc .eqv. true) then
+    psi = psi_bc
 end if
 
 print *, "Solving psi..."
@@ -154,6 +188,7 @@ call write_2Dfield(11, output_file, psi, nr, nz)
 
 ! ===== [STAGE  II] ===== !
 
+! Error needed to be fixed : need to consider dtheta/dr
 ! calculate w and dtheta_dt
 do i=1,nr-1
     do j=1,nz
@@ -162,6 +197,8 @@ do i=1,nr-1
         if(j.ne.1 .and. j.ne.nz) then
             r = (i-0.5) * dr
             w_mom(i,j) = (psi(i+1,j) - psi(i,j)) / (r*dr) ! note w is momentum flux
+
+
             theta(i,j) = theta(i,j) - theta0/g0 * a(i,j-1) * w_mom(i,j) / sigma(j)
             w_mom(i,j) = w_mom(i,j)/sigma(j)
         end if
@@ -239,6 +276,12 @@ if(file_exists .eqv. .true.) then
 else
     chi=0.0
 end if
+
+if(use_chi_bc .eqv. true) then
+    chi = chi_bc
+end if
+
+
 strategy = p_strategy; strategy_r = p_strategy_r;
 call solve_elliptic(max_iter, strategy, strategy_r, chi, coe, f, workspace, nr, nz, err, 0)
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."

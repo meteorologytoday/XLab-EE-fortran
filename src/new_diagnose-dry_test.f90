@@ -11,7 +11,7 @@ character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, &
 real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q(:,:), coe(:, :, :),    &
 &                     a(:,:), b(:,:), c(:,:), workspace(:,:),              &
 &                     solver_a(:,:), solver_b(:,:), solver_c(:,:), JJ(:,:),&
-&                     w_mom(:,:), u_mom(:,:), theta(:,:), eta(:,:), eta_tmp(:,:),&
+&                     w_mom(:,:), u_mom(:,:), theta(:,:), eta(:,:),        &
 &                     ra(:), za(:), exner(:), sigma(:), dthetadr(:,:),     &
 &                     psi_bc(:,:), chi_bc(:,:)
 
@@ -78,7 +78,7 @@ allocate(psi(nr,nz));   allocate(chi(nr,nz));      allocate(eta(nr,nz));
 allocate(f(nr,nz));     allocate(Q(nr,nz));        allocate(JJ(nr,nz));
 allocate(workspace(nr,nz));
 
-allocate(eta_tmp(nr-1,nz));                        allocate(coe(9,nr,nz));
+allocate(coe(9,nr,nz));
 allocate(a(nr, nz));allocate(b(nr, nz));   allocate(c(nr, nz));
 allocate(solver_a(nr-1, nz-2));allocate(solver_b(nr-1, nz-1));allocate(solver_c(nr-2, nz-1));
 
@@ -226,7 +226,7 @@ print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, 
 call cal_eta(nr, nz, chi, eta, ra, sigma, exner);
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta-nob.bin",eta,nr-1,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta-nob.bin",eta,nr,nz)
 call write_2Dfield(11,trim(output_folder)//"/CHI-nob.bin",chi,nr,nz)
 
 eta_avg_nob = cal_eta_avg(sigma, Q, eta, ra, za, nr, nz)
@@ -240,7 +240,7 @@ print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, 
 call cal_eta(nr, nz, chi, eta, ra, sigma, exner);
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta-b.bin",eta,nr-1,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta-b.bin",eta,nr,nz)
 call write_2Dfield(11,trim(output_folder)//"/CHI-b.bin",chi,nr,nz)
 
 
@@ -335,7 +335,7 @@ subroutine cal_eta(nr, nz, chi, eta, ra, sigma, exner)
 implicit none
 integer, intent(in) :: nr, nz
 real(4), intent(in) :: chi(nr,nz), ra(nr), sigma(j), exner(j)
-real(4), intent(out):: eta(nr-1,nz)
+real(4), intent(out):: eta(nr,nz)
 
 real(4) :: r,dr
 integer :: i,j

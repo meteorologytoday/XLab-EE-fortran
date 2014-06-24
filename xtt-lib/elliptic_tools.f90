@@ -178,6 +178,19 @@ do cnt=1, max_iter
     
     do i = 2,nx-1
         do j = 2,ny-1
+            if((isnan(coe(5,i,j)) .eqv. .true.)) then
+                print *, "coe is zero at (",i,",",j,")"
+                stop
+            end if
+            if(isnan(fr_dat(i,j)) .eqv. .true.) then
+                print *, "fr_dat is nan at (",i,",",j,")"
+                stop
+            end if
+            if(isnan(to_dat(i,j)) .eqv. .true.) then
+                print *, "to_dat is nan at (",i,",",j,")"
+                stop
+            end if
+
             to_dat(i,j) = fr_dat(i,j) + to_dat(i,j) / (- coe(5,i,j))
         end do
     end do

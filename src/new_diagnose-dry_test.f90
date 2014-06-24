@@ -6,7 +6,7 @@ implicit none
 
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, &
-&                 output_file, yes_or_no, previous_path, chi_bc_file, psi_bc_file
+&                 output_file, yes_or_no, chi_bc_file, psi_bc_file
 
 real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q(:,:), coe(:, :, :),    &
 &                     a(:,:), b(:,:), c(:,:), workspace(:,:),              &
@@ -17,20 +17,13 @@ real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q(:,:), coe(:, :, :),    &
 
 real(4)            :: testing_dt, Lr, Lz, dr, dz, eta_avg_b, eta_avg_nob
 
-integer :: p_strategy, strategy, max_iter
-real(4) :: p_strategy_r, strategy_r
+integer :: saved_strategy, strategy, max_iter
+real(4) :: saved_strategy_r, strategy_r
 
 integer :: i,j, m, n, err
 real(4) :: r, z, eta_avg, tmp1, tmp2, tmp3
-logical :: use_previous, file_exists, use_chi_bc, use_psi_bc
+logical :: file_exists, use_chi_bc, use_psi_bc
 
-read(*,'(a)') yes_or_no
-if(yes_or_no == 'yes') then
-    read(*,'(a)') previous_path
-    use_previous = .true.
-else
-    use_previous = .false.
-end if
 read(*,*) testing_dt
 read(*,*) Lr, Lz;    read(*,*) nr, nz;
 read(*,'(a)') input_folder
@@ -39,7 +32,7 @@ read(*,'(a)') A_file;
 read(*,'(a)') B_file;
 read(*,'(a)') C_file;
 read(*,'(a)') Q_file;
-read(*,*) p_strategy, p_strategy_r, max_iter;
+read(*,*) saved_strategy, saved_strategy_r, max_iter;
 read(*, '(a)') yes_or_no
 if(yes_or_no == 'yes') then
     read(*,'(a)') psi_bc_file;
@@ -57,7 +50,6 @@ end if
 
 
 
-print *, "Use previous relaxation: ", merge('Y'//'('// trim(previous_path) //')', 'N', use_previous .eqv. .true.)
 print *, "Testing time: ", testing_dt
 print *, "Lr:", Lr, ", Lz:", Lz
 print *, "nr:", nr, ", nz:", nz
@@ -67,11 +59,11 @@ print *, "A file: ", trim(A_file)
 print *, "B file: ", trim(B_file)
 print *, "C file: ", trim(C_file)
 print *, "Q file: ", trim(Q_file)
-print *, "Strategy wanted: ", p_strategy
-print *, "Strategy specific value: ", p_strategy_r
+print *, "Strategy wanted: ", saved_strategy
+print *, "Strategy specific value: ", saved_strategy_r
 print *, "Strategy max iteration: ", max_iter
-print *, "Use PSI boundary condition: ", merge('Y'//'('//trim(psi_bc_file)//')', 'N', use_psi_bc .eqv. .true.)
-print *, "Use CHI boundary condition: ", merge('Y'//'('//trim(chi_bc_file)//')', 'N', use_chi_bc .eqv. .true.)
+!print *, "Use PSI boundary condition: ", merge('Yes'//'('//trim(psi_bc_file)//')', 'No', use_psi_bc .eqv. .true.)
+!print *, "Use CHI boundary condition: ", merge('Yes'//'('//trim(chi_bc_file)//')', 'No', use_chi_bc .eqv. .true.)
 
 
 allocate(psi(nr,nz));   allocate(chi(nr,nz));      allocate(eta(nr,nz));
@@ -91,6 +83,11 @@ call read_2Dfield(15, trim(input_folder)//"/"//A_file, a, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//B_file, b, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//C_file, c, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//Q_file, Q, nr, nz)
+
+print *, "sum(A): ", sum(a)
+print *, "sum(B): ", sum(b)
+print *, "sum(C): ", sum(c)
+print *, "sum(Q): ", sum(Q)
 
 if(use_psi_bc .eqv. .true.) then
     allocate(psi_bc(nr,nz));
@@ -132,8 +129,10 @@ do i=1,nr
     end do
 end do
 
-output_file = trim(output_folder)//"/j.bin"
-call write_2Dfield(11, output_file, JJ, nr-1, nz)
+call write_2Dfield(11, trim(output_folder)//"/j.bin", JJ, nr, nz)
+call write_2Dfield(11, trim(output_folder)//"/a.bin", solver_a, nr-1, nz-2)
+call write_2Dfield(11, trim(output_folder)//"/b.bin", solver_b, nr-1, nz-1)
+call write_2Dfield(11, trim(output_folder)//"/c.bin", solver_c, nr-2, nz-1)
 
 
 f=0.0
@@ -146,20 +145,13 @@ call write_2Dfield(11, trim(output_folder)//"/djdr.bin", f, nr, nz)
 call cal_coe(solver_a, solver_b, solver_c, coe, dr, dz, nr, nz, err)
 
 ! ===== [STAGE   I] ===== !
-inquire(file=trim(previous_path)//'/psi.bin', exist=file_exists)
-if(file_exists .eqv. .true.) then
-    print *, "Using previous psi.bin..."
-    call read_2Dfield(15, trim(previous_path)//'/psi.bin', psi, nr, nz)
-else
-    psi = 0.0
-end if
-
+psi = 0.0
 if(use_psi_bc .eqv. .true.) then
     psi = psi_bc
 end if
 
 print *, "Solving psi..."
-strategy = p_strategy; strategy_r = p_strategy_r;
+strategy = saved_strategy; strategy_r = saved_strategy_r;
 call solve_elliptic(max_iter, strategy, strategy_r, psi, coe, f, workspace, nr, nz, err, 0)
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
@@ -172,6 +164,7 @@ call write_2Dfield(11, output_file, psi, nr, nz)
 ! calculate w and dtheta_dt
 call d_rdr(psi, w_mom)
 call d_dz(psi, u_mom); u_mom = -u_mom
+
 do i=1,nr
     do j=1,nz
         ! dtheta/dt = J - w dtheta/dz - u dtheta/dr
@@ -192,6 +185,7 @@ call write_2Dfield(11, trim(output_folder)//"/dtheta_dt.bin",theta,nr,nz)
 ! i+m         i         i+n
 call d_dr(theta, workspace)
 theta = workspace * testing_dt
+
 b = b - g0 / theta0 * theta
 
 call B2solverB
@@ -202,49 +196,49 @@ call write_2Dfield(11, trim(output_folder)//"/coe-new-b.bin", b, nr, nz)
 f = - theta0/g0 * b
 
 print *, "Solving CHI with B=0"
-workspace(1:nr-1,1:nz-1) = solver_b;solver_b = 0
+!workspace(1:nr-1,1:nz-1) = solver_b(1:nr-1,1:nz-1); solver_b = 0.0
 call cal_coe(solver_a, solver_b, solver_c, coe, dr, dz, nr, nz, err)
-solver_b = workspace(1:nr-1,1:nz-1) ! restore
-
-inquire(file=trim(previous_path)//'/CHI-nob.bin', exist=file_exists)
-if(file_exists .eqv. .true.) then
-    print *, "Using previous CHI-nob.bin..."
-    call read_2Dfield(15, trim(previous_path)//'/CHI-nob.bin', chi, nr, nz)
-else
-    chi=0.0
+if(hasNan3(coe)) then
+    print *, "coe has Nan"
 end if
+!solver_b(1:nr-1,1:nz-1) = workspace(1:nr-1,1:nz-1) ! restore
 
+chi = 0.0
 if(use_chi_bc .eqv. .true.) then
     chi = chi_bc
 end if
 
 
-strategy = p_strategy; strategy_r = p_strategy_r;
-call solve_elliptic(max_iter, strategy, strategy_r, chi, coe, f, workspace, nr, nz, err, 0)
+strategy = saved_strategy; strategy_r = saved_strategy_r;
+call solve_elliptic(max_iter, strategy, strategy_r, chi, coe, f, workspace, nr, nz, err, 1)
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-call cal_eta(nr, nz, chi, eta, ra, sigma, exner);
+call cal_eta(chi, eta);
 eta = eta * 100.0 ! in percent
 
 call write_2Dfield(11,trim(output_folder)//"/eta-nob.bin",eta,nr,nz)
 call write_2Dfield(11,trim(output_folder)//"/CHI-nob.bin",chi,nr,nz)
 
-eta_avg_nob = cal_eta_avg(sigma, Q, eta, ra, za, nr, nz)
+eta_avg_nob = cal_eta_avg(Q, eta)
 
 print *, "Solving CHI with B!=0"
+if(hasNan2(chi)) then
+    print *, "chi has Nan"
+    stop
+end if
 call cal_coe(solver_a, solver_b, solver_c, coe, dr, dz, nr, nz, err)
-strategy = p_strategy; strategy_r = p_strategy_r;
-call solve_elliptic(max_iter, strategy, strategy_r, chi, coe, f, workspace, nr, nz, err, 0)
+strategy = saved_strategy; strategy_r = saved_strategy_r;
+call solve_elliptic(max_iter, strategy, strategy_r, chi, coe, f, workspace, nr, nz, err, 1)
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-call cal_eta(nr, nz, chi, eta, ra, sigma, exner);
+call cal_eta(chi, eta);
 eta = eta * 100.0 ! in percent
 
 call write_2Dfield(11,trim(output_folder)//"/eta-b.bin",eta,nr,nz)
 call write_2Dfield(11,trim(output_folder)//"/CHI-b.bin",chi,nr,nz)
 
 
-eta_avg_b = cal_eta_avg(sigma, Q, eta, ra, za, nr, nz)
+eta_avg_b = cal_eta_avg(Q, eta)
 
 print *, "Average Efficiency without b (%): ", eta_avg_nob
 print *, "Average Efficiency with    b (%): ", eta_avg_b
@@ -256,6 +250,52 @@ close (15)
 
 
 contains
+
+logical function hasNan2(mtx)
+implicit none
+real(4) :: mtx(:,:)
+
+integer :: n1,n2
+integer :: i,j
+
+n1 = size(mtx,1)
+n2 = size(mtx,2)
+hasNan2 = .false. 
+do i=1,n1
+    do j=1,n2
+        if(isnan(mtx(i,j))) then
+            hasNan2 = .true.
+            exit
+        end if
+    end do
+end do
+
+end function
+
+
+logical function hasNan3(mtx)
+implicit none
+real(4) :: mtx(:,:,:)
+
+integer :: n1,n2,n3
+integer :: i,j,k
+
+n1 = size(mtx,1)
+n2 = size(mtx,2)
+n3 = size(mtx,3)
+hasNan3 = .false. 
+do i=1,n1
+    do j=1,n2
+        do k=1,n3
+            if(isnan(mtx(i,j,k))) then
+                hasNan3 = .true.
+                exit
+            end if
+        end do
+    end do
+end do
+
+end function
 
 subroutine d_dz(from_dat, to_dat)
 implicit none
@@ -300,44 +340,52 @@ real(4) :: from_dat(nr,nz), to_dat(nr,nz)
 integer :: i,j,m,n
 
 call d_dr(from_dat, to_dat)
+
 do i = 1, nr
     do j = 1, nz
-        to_dat(i,j) = to_dat(i,j) / ra(i) 
+           to_dat(i,j) = to_dat(i,j) / ra(i) 
     end do
 end do
+
+do i = 1, nr
+    if(ra(i) == 0) then
+        do j = 1, nz
+            ! using Taylor expansion in 1st order to interpolate value at 
+            ! ra(i) from ra(i+1) and ra(i+2) if ra(i)=0
+            to_dat(i,j) = 2.0 * to_dat(i+1,j) - to_dat(i+2,j)
+        end do
+    end if
+end do
+
+
 end subroutine
 
 
-real(4) function cal_eta_avg(sigma, Q, eta, ra, za, nr, nz)
+real(4) function cal_eta_avg(Q, eta)
 implicit none
-real(4) :: Q(nr, nz), eta(nr, nz), ra(nr), za(nz), sigma(nz)
-integer :: nr, nz
+real(4) :: Q(nr, nz), eta(nr, nz)
 
 real(4) :: sum_q, sum_eta_q, r, weight
 integer :: i,j
 
 sum_q = 0; sum_eta_q = 0;
-do i = 2,nr
+do i = 1,nr
     do j = 1, nz
-        r = ra(i)
         weight = MERGE(0.5,1.0,j==1 .or. j==nz)
-        sum_eta_q = sum_eta_q + eta(i,j) * Q(i,j) * sigma(j) * r * weight
-        sum_q = sum_q + Q(i,j) * sigma(j) * r * weight
+        sum_eta_q = sum_eta_q + eta(i,j) * Q(i,j) * sigma(j) * ra(i) * weight
+        sum_q = sum_q + Q(i,j) * sigma(j) * ra(i) * weight
     end do
 end do
 
 print *, "sum_eta_q:", sum_eta_q, ", sum_q:", sum_q
+print *, "efficiency(%): ", sum_eta_q / sum_q
 
 cal_eta_avg = sum_eta_q / sum_q
 end function
 
-subroutine cal_eta(nr, nz, chi, eta, ra, sigma, exner)
+subroutine cal_eta(chi, eta)
 implicit none
-integer, intent(in) :: nr, nz
-real(4), intent(in) :: chi(nr,nz), ra(nr), sigma(j), exner(j)
-real(4), intent(out):: eta(nr,nz)
-
-real(4) :: r,dr
+real(4) :: chi(nr,nz), eta(nr,nz)
 integer :: i,j
 
 call d_rdr(chi, eta)
@@ -348,8 +396,6 @@ do i=1,nr
     end do
 end do
 
-eta = eta * 100.0 ! in percent
-
 end subroutine
 
 subroutine A2solverA
@@ -358,27 +404,18 @@ integer :: i,j
 
 do i=1,nr-1
     do j=1,nz-2
-        solver_a(i,j) = (a(i  ,j+1)/ra(i  )/sigma(j+1)  &
-           &           + a(i+1,j+1)/ra(i+1)/sigma(j+1)) / 2.0
+        if(ra(i) == 0) then
+            ! using Taylor expansion in 1st order to interpolate value at 
+            ! ra(i+0.5) from ra(i+1) and ra(i+2) if ra(i)=0
+            solver_a(i,j) =   3.0/2.0 * a(i+1,j+1)/ra(i+1)/sigma(j+1)    &
+                &           - 1.0/2.0 * a(i+2,j+1)/ra(i+2)/sigma(j+1)
+        else
+            solver_a(i,j) = (a(i  ,j+1)/ra(i  )/sigma(j+1)   &
+                &          + a(i+1,j+1)/ra(i+1)/sigma(j+1)) / 2.0
+        end if
     end do
 end do
 
-do i=1,nr-1
-    do j=1,nz-1
-        solver_b(i,j) = ( b(i  ,j  )/ra(i  )/sigma(j  )  &
-           &            + b(i+1,j  )/ra(i+1)/sigma(j  )  &
-           &            + b(i  ,j+1)/ra(i  )/sigma(j+1)  &
-           &            + b(i+1,j+1)/ra(i+1)/sigma(j+1)) / 4.0
-    end do
-end do
-
-do i=1,nr-2
-    do j=1,nz-1
-        r = i * dr ! r
-        solver_c(i,j) = (c(i+1,j  )/ra(i+1)/sigma(j  )  &
-           &           + c(i+1,j+1)/ra(i+1)/sigma(j+1)) / 2.0
-    end do
-end do
 end subroutine
 
 
@@ -387,50 +424,30 @@ implicit none
 integer :: i,j
 
 do i=1,nr-1
-    do j=1,nz-2
-        solver_a(i,j) = (a(i  ,j+1)/ra(i  )/sigma(j+1)  &
-           &           + a(i+1,j+1)/ra(i+1)/sigma(j+1)) / 2.0
+    do j=1,nz-1
+        if(ra(i) == 0) then
+            ! using Taylor expansion in 1st order to interpolate value at 
+            ! ra(i+0.5) from ra(i+1) and ra(i+2) if ra(i)=0
+            solver_b(i,j) = (  3.0/2.0 * b(i+1,j  )/ra(i+1)/sigma(j  )    &
+                &            - 1.0/2.0 * b(i+2,j  )/ra(i+2)/sigma(j  )    &
+                &            + 3.0/2.0 * b(i+1,j+1)/ra(i+1)/sigma(j+1)    &
+                &            - 1.0/2.0 * b(i+2,j+1)/ra(i+2)/sigma(j+1) )/2.0
+ 
+        else
+            solver_b(i,j) = ( b(i  ,j  )/ra(i  )/sigma(j  )  &
+               &            + b(i+1,j  )/ra(i+1)/sigma(j  )  &
+               &            + b(i  ,j+1)/ra(i  )/sigma(j+1)  &
+               &            + b(i+1,j+1)/ra(i+1)/sigma(j+1)) / 4.0
+        end if
     end do
 end do
 
-do i=1,nr-1
-    do j=1,nz-1
-        solver_b(i,j) = ( b(i  ,j  )/ra(i  )/sigma(j  )  &
-           &            + b(i+1,j  )/ra(i+1)/sigma(j  )  &
-           &            + b(i  ,j+1)/ra(i  )/sigma(j+1)  &
-           &            + b(i+1,j+1)/ra(i+1)/sigma(j+1)) / 4.0
-    end do
-end do
-
-do i=1,nr-2
-    do j=1,nz-1
-        r = i * dr ! r
-        solver_c(i,j) = (c(i+1,j  )/ra(i+1)/sigma(j  )  &
-           &           + c(i+1,j+1)/ra(i+1)/sigma(j+1)) / 2.0
-    end do
-end do
 end subroutine
 
 
 subroutine C2solverC
 implicit none
 integer :: i,j
-
-do i=1,nr-1
-    do j=1,nz-2
-        solver_a(i,j) = (a(i  ,j+1)/ra(i  )/sigma(j+1)  &
-           &           + a(i+1,j+1)/ra(i+1)/sigma(j+1)) / 2.0
-    end do
-end do
-
-do i=1,nr-1
-    do j=1,nz-1
-        solver_b(i,j) = ( b(i  ,j  )/ra(i  )/sigma(j  )  &
-           &            + b(i+1,j  )/ra(i+1)/sigma(j  )  &
-           &            + b(i  ,j+1)/ra(i  )/sigma(j+1)  &
-           &            + b(i+1,j+1)/ra(i+1)/sigma(j+1)) / 4.0
-    end do
-end do
 
 do i=1,nr-2
     do j=1,nz-1

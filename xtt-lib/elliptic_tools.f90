@@ -17,11 +17,11 @@ real(4) :: PP, QQ, PQ4, Ap, Am, Cp, Cm, BXp, BXm, BYp, BYm
 ! 4 5 6
 ! 7 8 9
 !
-! +-C-+-C-+-C-+
-! | B A B A B |
-! +-C-+-C-+-C-+
-! | B A B A B |
-! +-C-+-C-+-C-+
+! +-A-+-A-+-A-+
+! | B C B C B |
+! +-A-+-A-+-A-+
+! | B C B C B |
+! +-A-+-A-+-A-+
 
 PP = dx**2
 QQ = dy**2

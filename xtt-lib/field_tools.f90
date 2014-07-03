@@ -13,7 +13,7 @@ open (fd, file=filename, access="DIRECT", status='REPLACE', &
 &       form='UNFORMATTED', recl=4*nx, iostat=eflag)
 
 if(eflag .ne. 0) then
-    print *, "Output field error."
+    print *, "Writing field error. File name: ", trim(filename)
 end if
 
 
@@ -21,7 +21,7 @@ write(fd,rec=1) (f(i),i=1,nx,1)
 close(fd)
 
 if(eflag .ne. 0) then
-    print *, "Output field error."
+    print *, "Writing field error. File name: ", trim(filename)
 end if
 
 end subroutine
@@ -38,14 +38,14 @@ open (fd, file=filename, access="DIRECT", status='OLD', &
 &       form='UNFORMATTED', recl=4*nx*ny, iostat=eflag)
 
 if(eflag .ne. 0) then
-    print *, "Output field error."
+    print *, "Reading field error. File name: ", trim(filename)
 end if
 
 read(fd, rec=1) ((f(i,j),i=1,nx,1),j=1,ny,1)
 close(fd)
 
 if(eflag .ne. 0) then
-    print *, "Reading field error."
+    print *, "Reading field error. File name: ", trim(filename)
 end if
 
 end subroutine
@@ -62,14 +62,14 @@ open (fd, file=filename, access="DIRECT", status='REPLACE', &
 &       form='UNFORMATTED', recl=4*nx*ny, iostat=eflag)
 
 if(eflag .ne. 0) then
-    print *, "Output field error."
+    print *, "Writing field error. File name: ", trim(filename)
 end if
 
 write(fd,rec=1) ((f(i,j),i=1,nx,1),j=1,ny,1)
 close(fd)
 
 if(eflag .ne. 0) then
-    print *, "Output field error."
+    print *, "Writing field error. File name: ", trim(filename)
 end if
 
 end subroutine
@@ -85,14 +85,14 @@ open (fd, file=filename, access="DIRECT", status='OLD', &
 &       form='UNFORMATTED', recl=4*nx*ny*nz, iostat=eflag)
 
 if(eflag .ne. 0) then
-    print *, "Reading field error."
+    print *, "Reading field error. File name: ", trim(filename)
 end if
 
 read(fd, rec=1) (((f(i,j,k),i=1,nx,1),j=1,ny,1),k=1,nz,1)
 close(fd)
 
 if(eflag .ne. 0) then
-    print *, "Reading field error."
+    print *, "Reading field error. File name: ", trim(filename)
 end if
 
 end subroutine
@@ -109,14 +109,14 @@ open (fd, file=filename, access="DIRECT", status='REPLACE', &
 &       form='UNFORMATTED', recl=4*nx*ny*nz, iostat=eflag)
 
 if(eflag .ne. 0) then
-    print *, "Output field error."
+    print *, "Writing field error. File name: ", trim(filename)
 end if
 
 write(fd,rec=1) (((f(i,j,k),i=1,nx,1),j=1,ny,1),k=1,nz,1)
 close(fd)
 
 if(eflag .ne. 0) then
-    print *, "Output field error."
+    print *, "Writing field error. File name: ", trim(filename)
 end if
 
 end subroutine

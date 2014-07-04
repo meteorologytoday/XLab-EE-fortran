@@ -22,6 +22,11 @@ C_fld = zeros(nr, nz);
 A_fld(:,:) = N_freq^2.0;
 B_fld(:,:) = 0.0;	
 
+[status, msg, msgid] = mkdir(in_fld);
+if(status != 1)
+	printf("Error: (%d)%s\n", msgid, msg);
+endif
+
 for k = 1:length(cases)
 	fprintf(stderr,"Now processing case %s...", cases{k});
 	fflush(stderr);
@@ -78,8 +83,8 @@ for k = 1:length(cases)
 	fprintf(fd,"%s\n", files.B);
 	fprintf(fd,"%s\n", files.C);
 	fprintf(fd,"%s\n", files.Q);
-	fprintf(fd,"%d %f %d\n", solver_strategy, solver_strategy_residue, solver_max_iteration);
-	fprintf(fd,"%d %f %d\n", solver_strategy, solver_strategy_residue, solver_max_iteration);
+	fprintf(fd,"%d %f %d %f\n", solver_strategy(1), solver_strategy_residue(1), solver_max_iteration(1), solver_alpha(1));
+	fprintf(fd,"%d %f %d %f\n", solver_strategy(2), solver_strategy_residue(2), solver_max_iteration(2), solver_alpha(2));
 	fprintf(fd,"no\nno\n");
 	fclose(fd);
 	fprintf(stderr,"done.\n");

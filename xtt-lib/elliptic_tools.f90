@@ -17,11 +17,11 @@ real(4) :: PP, QQ, PQ4, Ap, Am, Cp, Cm, BXp, BXm, BYp, BYm
 ! 4 5 6
 ! 7 8 9
 !
-! +-C-+-C-+-C-+
-! | B A B A B |
-! +-C-+-C-+-C-+
-! | B A B A B |
-! +-C-+-C-+-C-+
+! +-A-+-A-+-A-+
+! | B C B C B |
+! +-A-+-A-+-A-+
+! | B C B C B |
+! +-A-+-A-+-A-+
 
 PP = dx**2
 QQ = dy**2
@@ -178,6 +178,19 @@ do cnt=1, max_iter
     
     do i = 2,nx-1
         do j = 2,ny-1
+            if((isnan(coe(5,i,j)) .eqv. .true.)) then
+                print *, "coe is zero at (",i,",",j,")"
+                stop
+            end if
+            if(isnan(fr_dat(i,j)) .eqv. .true.) then
+                print *, "fr_dat is nan at (",i,",",j,")"
+                stop
+            end if
+            if(isnan(to_dat(i,j)) .eqv. .true.) then
+                print *, "to_dat is nan at (",i,",",j,")"
+                stop
+            end if
+
             to_dat(i,j) = fr_dat(i,j) + to_dat(i,j) / (- coe(5,i,j))
         end do
     end do

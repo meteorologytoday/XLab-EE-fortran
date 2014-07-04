@@ -1,3 +1,0 @@
-diagnose-dry_test.f90
-
-Stage II doesn't consider dtheta/dr which should be included.

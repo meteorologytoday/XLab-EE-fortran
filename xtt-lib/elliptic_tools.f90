@@ -87,7 +87,7 @@ end do
 end subroutine
 
 
-subroutine solve_elliptic(max_iter, strategy, strategy_r, dat, coe, f, &
+subroutine solve_elliptic(max_iter, strategy, strategy_r, alpha, dat, coe, f, &
 &                         workspace, nx, ny, err, debug)
 ! max_iter{Integer}
 !     Maxima iterations. The relaxation stops If pmax_iter]
@@ -118,16 +118,22 @@ subroutine solve_elliptic(max_iter, strategy, strategy_r, dat, coe, f, &
 ! err{Integer}
 !     [err] is the error code.
 !
+! alpha{Real}
+!     [alpha] is for overrelaxation.
+!     phi^{i+1}_{j} = phi^{i} + alpha * (residue)
+!
+!     notice that [alpha] = 1 means non-oveerrelaxation
+! 
 ! debug{Integer}
 !     Output debug message when [debug] == 1, blank otherwise.
 
 implicit none
 real(4), intent(inout), target :: dat(nx,ny), workspace(nx, ny)
 real(4), intent(inout) :: strategy_r
-real(4), intent(in)    :: coe(9, nx, ny), f(nx, ny)
+real(4), intent(in)    :: coe(9, nx, ny), f(nx, ny), alpha
 integer, intent(in)    :: max_iter, nx, ny
 integer, intent(inout) :: strategy, err
-integer      :: debug
+integer                :: debug, converge_cnt
 
 integer :: i,j,cnt, tmp_err
 integer :: check_step
@@ -135,6 +141,9 @@ real(4) :: tmp_r, err_now, err_before, stg3_max_err
 
 real(4), pointer :: fr_dat(:,:), to_dat(:,:), tmp_ptr(:,:)
 logical :: flag 
+
+print *, "alpha: ", alpha
+converge_cnt = 0
 
 err_before=Huge(err_before)
 check_step = 100
@@ -191,7 +200,7 @@ do cnt=1, max_iter
                 stop
             end if
 
-            to_dat(i,j) = fr_dat(i,j) + to_dat(i,j) / (- coe(5,i,j))
+            to_dat(i,j) = fr_dat(i,j) + alpha * to_dat(i,j) / (- coe(5,i,j))
         end do
     end do
 
@@ -202,7 +211,10 @@ do cnt=1, max_iter
             end if
         else if(strategy == 2 .or. strategy == 4) then
             if(cnt > check_step .and. (err_before - err_now)/err_before < strategy_r) then
-                err = 0
+              !  converge_cnt = converge_cnt + 1
+              !  if(converge_cnt >= 10)  then
+                    err = 0
+              !  end if
             end if
             err_before = err_now
         end if

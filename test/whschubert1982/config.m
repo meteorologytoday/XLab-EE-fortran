@@ -3,9 +3,11 @@
 in_fld = "input";
 out_fld = "output";
 mode = 'TENDENCY-DENSITY_BOUSSINESQ-INTEGRAL_CHECK';
-solver_strategy = 2;
-solver_strategy_residue = 1e-5;
-solver_max_iteration = 100000;
+solver_strategy = [2 2];
+solver_strategy_residue = [1e-5 1e-5];
+solver_max_iteration = [1000000 1000000];
+solver_alpha = [1.0 1.0];
+
 
 
 cases = {  'A',   'B',   'C',   'D',   'E', 'fig3ab', 'fig3cd'};
@@ -36,7 +38,7 @@ dt = 10800.0;
 
 QMax = (ones(1,length(cases)) * 10.0 / 86400.0 * (250000.0)^2.0) ./ (b2.^2.0 - b1.^2.0) * Cp;
 
-Lr = [0 1000000.0]; nr = 1001;
+Lr = [0 1000000.0]; nr = 501;
 Lz = [0        zt]; nz =  41;
 
 

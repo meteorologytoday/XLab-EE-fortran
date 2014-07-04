@@ -1,2 +1,5 @@
 bin/
-tmp/
+**/*.mod
+**/*.exe
+**/*.swp
+**/*.bin

@@ -39,6 +39,7 @@ open (fd, file=filename, access="DIRECT", status='OLD', &
 
 if(eflag .ne. 0) then
     print *, "Reading field error. File name: ", trim(filename)
+    print *, "Error number: ", eflag
 end if
 
 read(fd, rec=1) ((f(i,j),i=1,nx,1),j=1,ny,1)

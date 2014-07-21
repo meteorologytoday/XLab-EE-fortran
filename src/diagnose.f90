@@ -7,7 +7,7 @@ implicit none
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, &
 &                 output_file, yes_or_no, chi_bc_file, psi_bc_file, mode_str,  &
-&                 word(3)
+&                 word(4)
 
 ! Grid point are designed as follows: 
 ! O A O
@@ -27,7 +27,7 @@ real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
 &                     solver_a_A(:,:), solver_b_B(:,:), solver_c_C(:,:),   &
 &                     JJ_B(:,:), djdr(:,:),                                &
 &                     a_A(:,:), b_B(:,:), b_C(:,:),                        &
-&                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:),            &
+&                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),   &
 &                     ra(:), za(:), exner(:), sigma(:),                    &
 &                     psi_bc(:,:), chi_bc(:,:), wtheta(:,:)
 
@@ -39,7 +39,7 @@ integer :: saved_strategy_psi, max_iter_psi, &
 real(4) :: saved_strategy_psi_r, saved_strategy_chi_r, strategy_r, alpha,  &
 &          alpha_psi, alpha_chi
 
-integer :: i,j, m, n, err, mode(3)
+integer :: i,j, m, n, err, mode(4)
 real(4) :: r, z, eta_avg, tmp1, tmp2, tmp3, eta_avg_b_wtheta
 logical :: file_exists, use_chi_bc, use_psi_bc
 
@@ -76,12 +76,22 @@ else
     stop
 end if
 
-if(word(3) == 'INTEGRAL_CHECK') then
-    mode(3) = 0
-else if(word(3) == 'INTEGRAL_NOCHECK') then
+if(word(3) == 'ABC_UPDATE') then
     mode(3) = 1
+else if(word(3) == 'ABC_NOUPDATE') then
+    mode(3) = 0
 else
     print *, "Unknown Mode :", trim(word(3))
+    stop
+end if
+
+
+if(word(4) == 'INTEGRAL_CHECK') then
+    mode(4) = 1
+else if(word(4) == 'INTEGRAL_NOCHECK') then
+    mode(4) = 0
+else
+    print *, "Unknown Mode :", trim(word(4))
     stop
 end if
 if(mode(1) == 0) then
@@ -137,7 +147,7 @@ else
 end if
 
 if(use_chi_bc .eqv. .true.) then
-    print *, "Use PSI boundary condition: Yes (", trim(chi_bc_file), ")"
+    print *, "Use CHI boundary condition: Yes (", trim(chi_bc_file), ")"
 else
     print *, "Use PSI boundary condition: No "
 end if
@@ -157,7 +167,7 @@ allocate(a_A(nr-1, nz)); allocate(b_C(nr, nz-1));  allocate(b_B(nr-1,nz-1));
 allocate(solver_a_A(nr-1, nz-2)); allocate(solver_b_B(nr-1, nz-1));allocate(solver_c_C(nr-2, nz-1));
 allocate(wtheta(nr-1,nz-1));
 allocate(w_A(nr-1,nz)); allocate(u_C(nr,nz-1));
-allocate(theta(nr-1,nz-1)); allocate(eta(nr-1,nz));
+allocate(theta(nr-1,nz-1)); allocate(eta(nr-1,nz)); allocate(m2(nr-1,nz-1));
 allocate(ra(nr));       allocate(za(nz));          allocate(sigma(nz));
 allocate(exner(nz));    
 
@@ -202,6 +212,7 @@ do i=1,nr-1
     end do
 end do
 
+
 do i=1,nr-1
     do j=1,nz-1
         solver_b_B(i,j) = ( b_in(i  ,j  ) + b_in(i+1,j  )       &
@@ -216,6 +227,18 @@ do i=1,nr-2
             &           / ra(i+1) / (sigma(j)+sigma(j+1))  
     end do
 end do
+
+if(hasNan2(solver_a_A)) then
+    print *, "SOLVER a has NAN"
+end if
+if(hasNan2(solver_b_B)) then
+    print *, "SOLVER b has NAN"
+end if
+if(hasNan2(solver_c_C)) then
+    print *, "SOLVER c has NAN"
+end if
+
+
 
 ! ### Calculate a_A, b_C and b_B
 
@@ -298,7 +321,7 @@ if(mode(1) == 0) then
             theta(i,j) = JJ_B(i,j) - theta0/g0 * ( a_A(i,j  ) * w_A(i,j  )         &
             &                                + a_A(i,j+1) * w_A(i,j+1) ) / 2.0 &
             &                  + theta0/g0 * ( b_C(i  ,j) * u_C(i  ,j)         &
-            &                                + b_C(i+1,j) * u_C(i+1,j) ) / 2.0   
+            &                                + b_C(i+1,j) * u_C(i+1,j) ) / 2.0 
         end do
     end do
 
@@ -319,21 +342,23 @@ if(mode(1) == 0) then
     call d_dz_B2A(theta, wksp_A)
     a_A(:,2:nz-1) = a_A(:,2:nz-1) + g0 / theta0 * wksp_A(:,2:nz-1)
 
-    ! calculate (new) solver_b
-    do i=1,nr-1
-        do j=1,nz-1
+    if(mode(3) == 1) then
+        ! calculate (new) solver_b
+        do i=1,nr-1
+            do j=1,nz-1
             solver_b_B(i,j) = b_B(i,j)          &
                 &  / ((ra(i)+ra(i+1))/2.0)/((sigma(j)+sigma(j+1))/2.0)
+            end do
         end do
-    end do
 
-    ! calculate (new) solver_a
-    !do i=1,nr-1
-    !    do j=1,nz-1
-    !        solver_b_B(i,j) = b_B(i,j)          &
-    !            &  / ((ra(i)+ra(i+1))/2.0)/((sigma(j)+sigma(j+1))/2.0)
-    !    end do
-    !end do
+        ! calculate (new) solver_a
+        do i=1,nr-1
+            do j=1,nz-2
+                solver_a_A(i,j) = a_A(i,j+1)          &
+                    &  / ((ra(i)+ra(i+1))/2.0)/sigma(j+1)
+            end do
+        end do
+    end if
 
 
     !call write_2Dfield(11, trim(output_folder)//"/coe-new-b.bin", b_B, nr-1, nz-1)
@@ -350,12 +375,7 @@ do i=2,nr-1
     end do
 end do
 
-
-
 call write_2Dfield(11, trim(output_folder)//"/rhs_of_chi.bin", f, nr, nz)
-
-
-
 
 print *, "Solving CHI with B=0"
 wksp_B = solver_b_B; solver_b_B = 0.0
@@ -398,7 +418,7 @@ call write_2Dfield(11,trim(output_folder)//"/CHI-b.bin",chi,nr,nz)
 
 
 
-if(mode(3) == 0) then
+if(mode(4) == 1) then
     print *, "Integral check..."
     if(use_psi_bc .eqv. .true.) then
         psi = psi_bc

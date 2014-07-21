@@ -89,6 +89,7 @@ end subroutine
 
 subroutine solve_elliptic(max_iter, strategy, strategy_r, alpha, dat, coe, f, &
 &                         workspace, nx, ny, err, debug)
+!
 ! max_iter{Integer}
 !     Maxima iterations. The relaxation stops If pmax_iter]
 !     is reached but the convergence condition is not met.
@@ -114,6 +115,14 @@ subroutine solve_elliptic(max_iter, strategy, strategy_r, alpha, dat, coe, f, &
 !     strategy "3":
 !     Error is the maximaum
 !
+!
+! dat{real(:,:)}
+!     [dat] is the field wanted to be reverted to.
+!     Boundary condition can be specified on this field.
+!     Initial guess can also be specified here.
+!
+! f{real(:,:)}
+!     [f] is the right hand side.
 !
 ! err{Integer}
 !     [err] is the error code.
@@ -154,6 +163,7 @@ workspace(nx,1:ny) = dat(nx,1:ny)
 workspace(1:nx, 1) = dat(1:nx,1)
 workspace(1:nx,ny) = dat(1:nx,ny)
 
+workspace = dat
 
 fr_dat => workspace
 to_dat => dat
@@ -171,24 +181,31 @@ do cnt=1, max_iter
     to_dat => tmp_ptr
 
     call do_elliptic(fr_dat, coe, to_dat, nx, ny, tmp_err)
-    to_dat = to_dat - f     
+    to_dat(2:nx-1, 2:ny-1) = to_dat(2:nx-1,2:ny-1) - f(2:nx-1,2:ny-1)
 
     if(flag .eqv. .true.) then
         if(strategy == 1 .or. strategy == 2) then
-            err_now = sum(sqrt(to_dat**2))/((nx-1)*(ny-1))
+            err_now = 0
+            do i = 2, nx-1
+                do j = 2, ny-1
+                    err_now = err_now + to_dat(i,j)**2.0
+                end do
+            end do
+            err_now = sqrt(err_now/((nx-2)*(ny-2)))
         else if(strategy == 3 .or. strategy == 4) then
             err_now = maxval(abs(to_dat))
         end if
     end if
 
     if((debug == 1) .and. (flag .eqv. .true.)) then
-        print *, "Iter: ",cnt, "; err_now: ", err_now
+        print *, "Iter: ",cnt, "; err_now: ", err_now, "; ratio: ",&
+&                   (err_before - err_now)/err_before
     end if
     
     do i = 2,nx-1
         do j = 2,ny-1
             if((isnan(coe(5,i,j)) .eqv. .true.)) then
-                print *, "coe is zero at (",i,",",j,")"
+                print *, "coe is nan at (",i,",",j,")"
                 stop
             end if
             if(isnan(fr_dat(i,j)) .eqv. .true.) then
@@ -211,10 +228,11 @@ do cnt=1, max_iter
             end if
         else if(strategy == 2 .or. strategy == 4) then
             if(cnt > check_step .and. (err_before - err_now)/err_before < strategy_r) then
-              !  converge_cnt = converge_cnt + 1
-              !  if(converge_cnt >= 10)  then
+                converge_cnt = converge_cnt + 1
+                print *, "converge_cnt: ", converge_cnt
+                if(converge_cnt >= 10)  then
                     err = 0
-              !  end if
+                end if
             end if
             err_before = err_now
         end if

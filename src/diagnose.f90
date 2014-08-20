@@ -47,7 +47,7 @@ call cpu_time(time_beg)
 
 read(*,'(a)') mode_str;
 i = 1; n = 1
-do n=1,3
+do n=1, size(mode)
     j = INDEX(mode_str(i:), "-")
     if (j == 0) then
         word(n) = mode_str(i:)

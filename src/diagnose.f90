@@ -2,6 +2,7 @@ program diagnose
 use elliptic_tools
 use field_tools
 use constants
+use read_input_tools
 implicit none
 
 integer, parameter :: stdin=5, fd=15

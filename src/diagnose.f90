@@ -2,12 +2,14 @@ program diagnose
 use elliptic_tools
 use field_tools
 use constants
+use read_input_tools
 implicit none
 
+integer, parameter :: stdin=5, fd=15
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, &
 &                 output_file, yes_or_no, chi_bc_file, psi_bc_file, mode_str,  &
-&                 word(4)
+&                 word(4), buffer
 
 ! Grid point are designed as follows: 
 ! O A O
@@ -44,8 +46,7 @@ real(4) :: r, z, eta_avg, tmp1, tmp2, tmp3, eta_avg_b_wtheta
 logical :: file_exists, use_chi_bc, use_psi_bc
 
 call cpu_time(time_beg)
-
-read(*,'(a)') mode_str;
+call read_input(stdin, mode_str)
 i = 1; n = 1
 do n=1, size(mode)
     j = INDEX(mode_str(i:), "-")
@@ -95,28 +96,33 @@ else
     stop
 end if
 if(mode(1) == 0) then
-    read(*,*) testing_dt
+    call read_input(stdin, buffer); read(buffer, *) testing_dt
 end if
-read(*,*) Lr, Lz;    read(*,*) nr, nz;
-read(*,'(a)') input_folder
-read(*,'(a)') output_folder
-read(*,'(a)') A_file;
-read(*,'(a)') B_file;
-read(*,'(a)') C_file;
-read(*,'(a)') Q_file;
-read(*,*) saved_strategy_psi, saved_strategy_psi_r, max_iter_psi, alpha_psi;
-read(*,*) saved_strategy_chi, saved_strategy_chi_r, max_iter_chi, alpha_chi;
+call read_input(stdin, buffer); read(buffer, *) Lr, Lz;
+call read_input(stdin, buffer); read(buffer, *) nr, nz;
+call read_input(stdin, input_folder);
+call read_input(stdin, output_folder);
+call read_input(stdin, A_file);
+call read_input(stdin, B_file);
+call read_input(stdin, C_file);
+call read_input(stdin, Q_file);
 
-read(*, '(a)') yes_or_no
+call read_input(stdin, buffer);
+read(buffer, *) saved_strategy_psi, saved_strategy_psi_r, max_iter_psi, alpha_psi;
+
+call read_input(stdin, buffer);
+read(buffer, *) saved_strategy_chi, saved_strategy_chi_r, max_iter_chi, alpha_chi;
+
+call read_input(stdin, yes_or_no)
 if(yes_or_no == 'yes') then
-    read(*,'(a)') psi_bc_file;
+    call read_input(stdin, psi_bc_file);
     use_psi_bc = .true.
 else
     use_psi_bc = .false.
 end if
-read(*, '(a)') yes_or_no
+call read_input(stdin, yes_or_no)
 if(yes_or_no == 'yes') then
-    read(*,'(a)') chi_bc_file
+    call read_input(stdin, chi_bc_file);
     use_chi_bc = .true.
 else
     use_chi_bc = .false.

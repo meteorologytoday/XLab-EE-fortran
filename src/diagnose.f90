@@ -24,6 +24,7 @@ character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, &
 
 
 real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
+&                     F_in(:,:),&
 &                     a_in(:,:), b_in(:,:), c_in(:,:),                     &
 &                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),  &
 &                     solver_a_A(:,:), solver_b_B(:,:), solver_c_C(:,:),   &

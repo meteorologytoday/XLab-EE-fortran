@@ -7,8 +7,8 @@ implicit none
 
 integer, parameter :: stdin=5, fd=15
 integer        :: nr, nz
-character(256) :: A_file, B_file, C_file, Q_file, input_folder, output_folder, &
-&                 output_file, yes_or_no, chi_bc_file, psi_bc_file, mode_str,  &
+character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_folder, &
+&                 output_file, yes_or_no, chi_bc_file, psi_bc_file, mode_str,          &
 &                 word(4), buffer
 
 ! Grid point are designed as follows: 
@@ -28,7 +28,7 @@ real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
 &                     a_in(:,:), b_in(:,:), c_in(:,:),                     &
 &                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),  &
 &                     solver_a_A(:,:), solver_b_B(:,:), solver_c_C(:,:),   &
-&                     JJ_B(:,:), djdr(:,:),                                &
+&                     JJ_B(:,:), djdr(:,:), dmFdz(:,:),                    &
 &                     a_A(:,:), b_B(:,:), b_C(:,:),                        &
 &                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),   &
 &                     ra(:), za(:), exner(:), sigma(:),                    &
@@ -107,6 +107,7 @@ call read_input(stdin, A_file);
 call read_input(stdin, B_file);
 call read_input(stdin, C_file);
 call read_input(stdin, Q_file);
+call read_input(stdin, F_file);
 
 call read_input(stdin, buffer);
 read(buffer, *) saved_strategy_psi, saved_strategy_psi_r, max_iter_psi, alpha_psi;
@@ -142,6 +143,7 @@ print *, "A file: ", trim(A_file)
 print *, "B file: ", trim(B_file)
 print *, "C file: ", trim(C_file)
 print *, "Q file: ", trim(Q_file)
+print *, "F file: ", trim(F_file)
 print *, "psi's strategy, residue, iter: ", saved_strategy_psi, &
 &           saved_strategy_psi_r, max_iter_psi, alpha_psi
 print *, "chi's strategy, residue, iter: ", saved_strategy_chi, &
@@ -162,7 +164,8 @@ end if
 
 allocate(psi(nr,nz));   allocate(chi(nr,nz));   
 allocate(f(nr,nz));     allocate(Q_in(nr-1,nz-1)); allocate(JJ_B(nr-1,nz-1));
-allocate(djdr(nr,nz));
+allocate(F_in(nr-1,nz-1));
+allocate(djdr(nr,nz)); allocate(dmFdz(nr,nz));
 allocate(wksp_O(nr,nz));
 allocate(wksp_A(nr-1,nz));
 allocate(wksp_B(nr-1,nz-1));
@@ -182,6 +185,7 @@ call read_2Dfield(15, trim(input_folder)//"/"//A_file, a_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//B_file, b_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//C_file, c_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//Q_file, Q_in, nr, nz)
+call read_2Dfield(15, trim(input_folder)//"/"//F_file, F_in, nr, nz)
 
 if(use_psi_bc .eqv. .true.) then
     allocate(psi_bc(nr,nz));
@@ -247,7 +251,7 @@ end if
 
 
 
-! ### Calculate a_A, b_C and b_B
+! ### Calculate a_A, b_C, b_B, c_C
 
 do i=1,nr-1
     do j=1,nz
@@ -268,6 +272,25 @@ do i=1,nr-1
     end do
 end do
 
+do i=1,nr
+    do j=1,nz-1
+        c_C(i,j) = (c_in(i,j) + c_in(i,j+1)) / 2.0
+    end do
+end do
+
+! ### Calculate angular momentum square by C term (c_C)
+do j=1, nz-1
+    m2(i,j) = (ra(2) ** 3.0) * c_C(1, j) * (ra(1) + ra(2))/2.0
+end do 
+
+! The integration order matters! Please be aware of it.
+do i=2, nr-1
+    do j=1, nz-1
+        m2(i,j) = m2(i-1) + (ra(i)**3.0) * c_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
+    end do
+end do
+
+
 ! ### Assign JJ_in JJ_B
 do i=1,nr-1
     do j=1,nz-1
@@ -280,9 +303,9 @@ call write_2Dfield(11, trim(output_folder)//"/solver_a.bin", solver_a_A, nr-1, n
 call write_2Dfield(11, trim(output_folder)//"/solver_b.bin", solver_b_B, nr-1, nz-1)
 call write_2Dfield(11, trim(output_folder)//"/solver_c.bin", solver_c_C, nr-2, nz-1)
 
+
+! ### Assign 1st part of RHS = g0/theta0 * dJJ/dr
 djdr = 0.0
-f=0.0
-! ### Assign f= g0/theta0 * dJJ/dr
 call d_dr_B2C(JJ_B, wksp_C)
 !print *, "djdr max: " , maxval(abs(wksp_C))
 ! wksp_A to f
@@ -297,6 +320,22 @@ djdr = djdr * g0 / theta0
 call write_2Dfield(11, trim(output_folder)//"/djdr.bin", djdr, nr, nz)
 
 
+! ### 
+
+
+! ### Assign 2nt part of RHS = g0/theta0 * dJJ/dr
+dmFdz = 0.0
+do i=2,nr-1
+    do j=2,nz-1
+         = 
+    end do
+end do
+    
+!print *, "djdr max: " , maxval(abs(djdr))
+call write_2Dfield(11, trim(output_folder)//"/djdr.bin", djdr, nr, nz)
+
+
+
 print *, "Initialization complete."
 
 if(mode(1) == 0) then
@@ -308,7 +347,7 @@ if(mode(1) == 0) then
     end if
 
     print *, "Solving psi..."
-    f = djdr
+    f = djdr + dFdz
     strategy = saved_strategy_psi; strategy_r = saved_strategy_psi_r;
     alpha = alpha_psi;
     call solve_elliptic(max_iter_psi, strategy, strategy_r, alpha, psi, coe, f, wksp_O, nr, nz, err, 0)

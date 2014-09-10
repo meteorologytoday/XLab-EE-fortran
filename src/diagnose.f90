@@ -28,8 +28,8 @@ real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
 &                     a_in(:,:), b_in(:,:), c_in(:,:),                     &
 &                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),  &
 &                     solver_a_A(:,:), solver_b_B(:,:), solver_c_C(:,:),   &
-&                     JJ_B(:,:), djdr(:,:), dmFdz(:,:),                    &
-&                     a_A(:,:), b_B(:,:), b_C(:,:),                        &
+&                     JJ_B(:,:), RHS_thm(:,:), RHS_mom(:,:),               &
+&                     a_A(:,:), b_B(:,:), b_C(:,:), c_C(:,:),              &
 &                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),   &
 &                     ra(:), za(:), exner(:), sigma(:),                    &
 &                     psi_bc(:,:), chi_bc(:,:), wtheta(:,:)
@@ -165,7 +165,7 @@ end if
 allocate(psi(nr,nz));   allocate(chi(nr,nz));   
 allocate(f(nr,nz));     allocate(Q_in(nr-1,nz-1)); allocate(JJ_B(nr-1,nz-1));
 allocate(F_in(nr-1,nz-1));
-allocate(djdr(nr,nz)); allocate(dmFdz(nr,nz));
+allocate(RHS_thm(nr,nz)); allocate(RHS_mom(nr,nz));
 allocate(wksp_O(nr,nz));
 allocate(wksp_A(nr-1,nz));
 allocate(wksp_B(nr-1,nz-1));
@@ -174,6 +174,7 @@ allocate(wksp_C(nr,nz-1));
 allocate(coe(9,nr,nz));
 allocate(a_in(nr, nz));  allocate(b_in(nr, nz));   allocate(c_in(nr, nz));
 allocate(a_A(nr-1, nz)); allocate(b_C(nr, nz-1));  allocate(b_B(nr-1,nz-1));
+allocate(c_C(nr, nz-1));
 allocate(solver_a_A(nr-1, nz-2)); allocate(solver_b_B(nr-1, nz-1));allocate(solver_c_C(nr-2, nz-1));
 allocate(wtheta(nr-1,nz-1));
 allocate(w_A(nr-1,nz)); allocate(u_C(nr,nz-1));
@@ -278,15 +279,15 @@ do i=1,nr
     end do
 end do
 
-! ### Calculate angular momentum square by C term (c_C)
-do j=1, nz-1
-    m2(i,j) = (ra(2) ** 3.0) * c_C(1, j) * (ra(1) + ra(2))/2.0
-end do 
-
+! ### Derive angular momentum square from C term (c_C)
 ! The integration order matters! Please be aware of it.
-do i=2, nr-1
+do i=1, nr-1
     do j=1, nz-1
-        m2(i,j) = m2(i-1) + (ra(i)**3.0) * c_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
+        if(i==1) then
+            m2(i,j) = 0
+        else
+            m2(i,j) = m2(i-1,j) + (ra(i)**3.0) * c_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
+        end if
     end do
 end do
 
@@ -305,34 +306,40 @@ call write_2Dfield(11, trim(output_folder)//"/solver_c.bin", solver_c_C, nr-2, n
 
 
 ! ### Assign 1st part of RHS = g0/theta0 * dJJ/dr
-djdr = 0.0
+RHS_thm = 0.0
 call d_dr_B2C(JJ_B, wksp_C)
 !print *, "djdr max: " , maxval(abs(wksp_C))
+! wksp_C to f
+do i=2,nr-1
+    do j=2,nz-1
+        RHS_thm(i,j) = (wksp_C(i,j)+wksp_C(i,j-1))/2.0
+    end do
+end do
+!print *, "djdr max: " , maxval(abs(djdr))
+RHS_thm = RHS_thm * g0 / theta0
+!print *, "djdr max: " , maxval(abs(djdr))
+call write_2Dfield(11, trim(output_folder)//"/RHS_thm.bin", RHS_thm, nr, nz)
+
+
+! ### Assign 2nt part of RHS = - 2 * r^(-2) * d(mf)/dz
+RHS_mom = 0.0
+do i=1,nr-1
+    do j=1,nz-1
+         wksp_B(i,j) = sqrt(m2(i,j)) * F_in(i,j)
+    end do
+end do
+call d_dz_B2A(wksp_B, wksp_A)
 ! wksp_A to f
 do i=2,nr-1
     do j=2,nz-1
-        djdr(i,j) = (wksp_C(i,j)+wksp_C(i,j-1))/2.0
+         ! Notice that 2.0 factor of averge wksp_A cancelled by another in 2*m*F
+         RHS_mom(i,j) = - (wksp_A(i,j) + wksp_A(i-1,j))/(ra(i)**2.0)
     end do
 end do
-!print *, "djdr max: " , maxval(abs(djdr))
-djdr = djdr * g0 / theta0
-!print *, "djdr max: " , maxval(abs(djdr))
-call write_2Dfield(11, trim(output_folder)//"/djdr.bin", djdr, nr, nz)
 
-
-! ### 
-
-
-! ### Assign 2nt part of RHS = g0/theta0 * dJJ/dr
-dmFdz = 0.0
-do i=2,nr-1
-    do j=2,nz-1
-         = 
-    end do
-end do
     
-!print *, "djdr max: " , maxval(abs(djdr))
-call write_2Dfield(11, trim(output_folder)//"/djdr.bin", djdr, nr, nz)
+!print *, "RHS_mom max: " , maxval(abs(djdr))
+call write_2Dfield(11, trim(output_folder)//"/RHS_mom.bin", RHS_mom, nr, nz)
 
 
 
@@ -347,7 +354,7 @@ if(mode(1) == 0) then
     end if
 
     print *, "Solving psi..."
-    f = djdr + dFdz
+    f = RHS_thm + RHS_mom
     strategy = saved_strategy_psi; strategy_r = saved_strategy_psi_r;
     alpha = alpha_psi;
     call solve_elliptic(max_iter_psi, strategy, strategy_r, alpha, psi, coe, f, wksp_O, nr, nz, err, 0)
@@ -471,7 +478,7 @@ if(mode(4) == 1) then
     end if
 
     print *, "Solving psi..."
-    f = djdr;
+    f = RHS_thm + RHS_mom;
     call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
     strategy = saved_strategy_psi; strategy_r = saved_strategy_psi_r;
     alpha = alpha_psi;

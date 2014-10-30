@@ -48,8 +48,11 @@ real(4) :: saved_strategy_rpsi_r, saved_strategy_rchi_r, strategy_r, alpha,  &
 
 integer :: i,j, m, n, err, mode(4)
 real(4) :: r, z, eta_avg, tmp1, tmp2, tmp3, eta_avg_b_wtheta
-logical :: file_exists, use_rchi_bc, use_rpsi_bc
+logical :: file_exists, use_rchi_bc, use_rpsi_bc, debug_mode
 
+
+
+inquire(file="./debug_mode", exist=debug_mode);
 
 call cpu_time(time_beg)
 call read_input(stdin, mode_str)
@@ -361,9 +364,10 @@ if(mode(1) == 0) then
 
     print *, "Solving rpsi..."
     f = RHS_rpsi_thm + RHS_rpsi_mom
-    strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
-    alpha = alpha_rpsi;
-    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, 1)
+    strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r
+    alpha = alpha_rpsi
+    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
     print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
     call write_2Dfield(11, trim(output_folder)//"/rpsi_before-O.bin", rpsi, nr, nz)
@@ -450,7 +454,8 @@ end if
 
 strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
 alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, 1)
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
 call cal_eta(rchi, eta);
@@ -466,7 +471,8 @@ print *, "Solving CHI with B!=0"
 call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
 strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
 alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, 1)
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
 call cal_eta(rchi, eta);
@@ -489,7 +495,8 @@ if(mode(4) == 1) then
     call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
     strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
     alpha = alpha_rpsi;
-    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, 0)
+    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
     print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
     call write_2Dfield(11, trim(output_folder)//"/rpsi-O.bin", rpsi, nr, nz)
 

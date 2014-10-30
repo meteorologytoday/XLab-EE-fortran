@@ -146,12 +146,13 @@ integer                :: debug, converge_cnt
 
 integer :: i,j,cnt, tmp_err
 integer :: check_step
-real(4) :: tmp_r, err_now, err_before, stg3_max_err 
+real(4) :: tmp_r, err_now, err_before, stg3_max_err, ratio 
 
 real(4), pointer :: fr_dat(:,:), to_dat(:,:), tmp_ptr(:,:)
-logical :: flag 
+logical :: flag ! after every [check_step] iterations this flag will be turned on. 
 
 print *, "alpha: ", alpha
+print *, "debug: ", debug
 converge_cnt = 0
 
 err_before=Huge(err_before)
@@ -196,10 +197,11 @@ do cnt=1, max_iter
             err_now = maxval(abs(to_dat))
         end if
     end if
-
-    if((debug == 1) .and. (flag .eqv. .true.)) then
-        print *, "Iter: ",cnt, "; err_now: ", err_now, "; ratio: ",&
-&                   (err_before - err_now)/err_before
+    if(flag .eqv. .true.) then
+        ratio = (err_before - err_now) / err_before;
+        if(debug == 1) then
+            print *, "Iter: ",cnt, "; err_now: ", err_now, "; ratio: ", ratio
+        end if
     end if
     
     do i = 2,nx-1
@@ -227,7 +229,10 @@ do cnt=1, max_iter
                 err = 0
             end if
         else if(strategy == 2 .or. strategy == 4) then
-            if(cnt > check_step .and. (err_before - err_now)/err_before < strategy_r) then
+            if(err_before == 0) then
+                err = 0
+                print *, "Error = 0, hardly to see this!"
+            else if(abs(ratio) < strategy_r) then
                 converge_cnt = converge_cnt + 1
                 print *, "converge_cnt: ", converge_cnt
                 if(converge_cnt >= 10)  then

@@ -8,43 +8,48 @@ implicit none
 integer, parameter :: stdin=5, fd=15
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_folder, &
-&                 output_file, yes_or_no, chi_bc_file, psi_bc_file, mode_str,          &
+&                 output_file, yes_or_no, rchi_bc_file, rpsi_bc_file, mode_str,          &
 &                 word(4), buffer
+
+
 
 ! Grid point are designed as follows: 
 ! O A O
 ! C B C
 ! O A O
 ! 
-! O : (nr   x nz  ) psi chi a_in b_in c_in Q_in f dthetadr
-! A : (nr-1 x nz  ) w eta
-! B : (nr-1 x nz-1) m theta F Q
-! C : (nr   x nz-1) u
+! O  : (nr   , nz  ) rpsi rchi a_in b_in c_in Q_in f dthetadr
+! A  : (nr-1 , nz  ) w eta
+! B  : (nr-1 , nz-1) m theta F Q solver_B
+! C  : (nr   , nz-1) u
+! sA : (nr-1 , nz-2) solver_A
+! sC : (nr-2 , nz-1) solver_C
 !
 
 
-real(4), pointer   :: psi(:,:), chi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
-&                     F_in(:,:),&
+real(4), pointer   :: rpsi(:,:), rchi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
+&                     F_in(:,:),                                           &
 &                     a_in(:,:), b_in(:,:), c_in(:,:),                     &
 &                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),  &
 &                     solver_a_A(:,:), solver_b_B(:,:), solver_c_C(:,:),   &
-&                     JJ_B(:,:), RHS_thm(:,:), RHS_mom(:,:),               &
+&                     JJ_B(:,:), RHS_rpsi_thm(:,:), RHS_rpsi_mom(:,:),     &
 &                     a_A(:,:), b_B(:,:), b_C(:,:), c_C(:,:),              &
 &                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),   &
 &                     ra(:), za(:), exner(:), sigma(:),                    &
-&                     psi_bc(:,:), chi_bc(:,:), wtheta(:,:)
+&                     rpsi_bc(:,:), rchi_bc(:,:), wtheta(:,:)
 
 real(4)            :: testing_dt, Lr, Lz, dr, dz, eta_avg_b, eta_avg_nob,  &
                       time_beg, time_end
 
-integer :: saved_strategy_psi, max_iter_psi, &
-&          saved_strategy_chi, max_iter_chi, strategy
-real(4) :: saved_strategy_psi_r, saved_strategy_chi_r, strategy_r, alpha,  &
-&          alpha_psi, alpha_chi
+integer :: saved_strategy_rpsi, max_iter_rpsi, &
+&          saved_strategy_rchi, max_iter_rchi, strategy
+real(4) :: saved_strategy_rpsi_r, saved_strategy_rchi_r, strategy_r, alpha,  &
+&          alpha_rpsi, alpha_rchi
 
 integer :: i,j, m, n, err, mode(4)
 real(4) :: r, z, eta_avg, tmp1, tmp2, tmp3, eta_avg_b_wtheta
-logical :: file_exists, use_chi_bc, use_psi_bc
+logical :: file_exists, use_rchi_bc, use_rpsi_bc
+
 
 call cpu_time(time_beg)
 call read_input(stdin, mode_str)
@@ -78,6 +83,7 @@ else
     stop
 end if
 
+! ABC : [ABC] flag
 if(word(3) == 'ABC_UPDATE') then
     mode(3) = 1
 else if(word(3) == 'ABC_NOUPDATE') then
@@ -86,7 +92,6 @@ else
     print *, "Unknown Mode :", trim(word(3))
     stop
 end if
-
 
 if(word(4) == 'INTEGRAL_CHECK') then
     mode(4) = 1
@@ -110,24 +115,24 @@ call read_input(stdin, Q_file);
 call read_input(stdin, F_file);
 
 call read_input(stdin, buffer);
-read(buffer, *) saved_strategy_psi, saved_strategy_psi_r, max_iter_psi, alpha_psi;
+read(buffer, *) saved_strategy_rpsi, saved_strategy_rpsi_r, max_iter_rpsi, alpha_rpsi;
 
 call read_input(stdin, buffer);
-read(buffer, *) saved_strategy_chi, saved_strategy_chi_r, max_iter_chi, alpha_chi;
+read(buffer, *) saved_strategy_rchi, saved_strategy_rchi_r, max_iter_rchi, alpha_rchi;
 
 call read_input(stdin, yes_or_no)
 if(yes_or_no == 'yes') then
-    call read_input(stdin, psi_bc_file);
-    use_psi_bc = .true.
+    call read_input(stdin, rpsi_bc_file);
+    use_rpsi_bc = .true.
 else
-    use_psi_bc = .false.
+    use_rpsi_bc = .false.
 end if
 call read_input(stdin, yes_or_no)
 if(yes_or_no == 'yes') then
-    call read_input(stdin, chi_bc_file);
-    use_chi_bc = .true.
+    call read_input(stdin, rchi_bc_file);
+    use_rchi_bc = .true.
 else
-    use_chi_bc = .false.
+    use_rchi_bc = .false.
 end if
 
 
@@ -144,28 +149,28 @@ print *, "B file: ", trim(B_file)
 print *, "C file: ", trim(C_file)
 print *, "Q file: ", trim(Q_file)
 print *, "F file: ", trim(F_file)
-print *, "psi's strategy, residue, iter: ", saved_strategy_psi, &
-&           saved_strategy_psi_r, max_iter_psi, alpha_psi
-print *, "chi's strategy, residue, iter: ", saved_strategy_chi, &
-&           saved_strategy_chi_r, max_iter_chi, alpha_chi
+print *, "rpsi's strategy, residue, iter: ", saved_strategy_rpsi, &
+&           saved_strategy_rpsi_r, max_iter_rpsi, alpha_rpsi
+print *, "rchi's strategy, residue, iter: ", saved_strategy_rchi, &
+&           saved_strategy_rchi_r, max_iter_rchi, alpha_rchi
 
-if(use_psi_bc .eqv. .true.) then
-    print *, "Use PSI boundary condition: Yes (", trim(psi_bc_file), ")"
+if(use_rpsi_bc .eqv. .true.) then
+    print *, "Use rpsi boundary condition: Yes (", trim(rpsi_bc_file), ")"
 else
-    print *, "Use PSI boundary condition: No "
+    print *, "Use rpsi boundary condition: No "
 end if
 
-if(use_chi_bc .eqv. .true.) then
-    print *, "Use CHI boundary condition: Yes (", trim(chi_bc_file), ")"
+if(use_rchi_bc .eqv. .true.) then
+    print *, "Use CHI boundary condition: Yes (", trim(rchi_bc_file), ")"
 else
-    print *, "Use PSI boundary condition: No "
+    print *, "Use rpsi boundary condition: No "
 end if
 
 
-allocate(psi(nr,nz));   allocate(chi(nr,nz));   
+allocate(rpsi(nr,nz));   allocate(rchi(nr,nz));   
 allocate(f(nr,nz));     allocate(Q_in(nr-1,nz-1)); allocate(JJ_B(nr-1,nz-1));
 allocate(F_in(nr-1,nz-1));
-allocate(RHS_thm(nr,nz)); allocate(RHS_mom(nr,nz));
+allocate(RHS_rpsi_thm(nr,nz)); allocate(RHS_rpsi_mom(nr,nz));
 allocate(wksp_O(nr,nz));
 allocate(wksp_A(nr-1,nz));
 allocate(wksp_B(nr-1,nz-1));
@@ -188,15 +193,15 @@ call read_2Dfield(15, trim(input_folder)//"/"//C_file, c_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//Q_file, Q_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//F_file, F_in, nr, nz)
 
-if(use_psi_bc .eqv. .true.) then
-    allocate(psi_bc(nr,nz));
-    call read_2Dfield(15, trim(input_folder)//"/"//psi_bc_file, psi_bc, nr, nz)
+if(use_rpsi_bc .eqv. .true.) then
+    allocate(rpsi_bc(nr,nz));
+    call read_2Dfield(15, trim(input_folder)//"/"//rpsi_bc_file, rpsi_bc, nr, nz)
 end if
 
 
-if(use_chi_bc .eqv. .true.) then
-    allocate(chi_bc(nr,nz));
-    call read_2Dfield(15, trim(input_folder)//"/"//chi_bc_file, chi_bc, nr, nz)
+if(use_rchi_bc .eqv. .true.) then
+    allocate(rchi_bc(nr,nz));
+    call read_2Dfield(15, trim(input_folder)//"/"//rchi_bc_file, rchi_bc, nr, nz)
 end if
 
 
@@ -299,30 +304,30 @@ do i=1,nr-1
     end do
 end do
 
-call write_2Dfield(11, trim(output_folder)//"/j-B.bin",     JJ_B, nr-1, nz-1)
-call write_2Dfield(11, trim(output_folder)//"/solver_a.bin", solver_a_A, nr-1, nz-2)
-call write_2Dfield(11, trim(output_folder)//"/solver_b.bin", solver_b_B, nr-1, nz-1)
-call write_2Dfield(11, trim(output_folder)//"/solver_c.bin", solver_c_C, nr-2, nz-1)
+call write_2Dfield(11, trim(output_folder)//"/J-B.bin",     JJ_B, nr-1, nz-1)
+call write_2Dfield(11, trim(output_folder)//"/solver_a-sA.bin", solver_a_A, nr-1, nz-2)
+call write_2Dfield(11, trim(output_folder)//"/solver_b-B.bin", solver_b_B, nr-1, nz-1)
+call write_2Dfield(11, trim(output_folder)//"/solver_c-sC.bin", solver_c_C, nr-2, nz-1)
 
 
 ! ### Assign 1st part of RHS = g0/theta0 * dJJ/dr
-RHS_thm = 0.0
+RHS_rpsi_thm = 0.0
 call d_dr_B2C(JJ_B, wksp_C)
 !print *, "djdr max: " , maxval(abs(wksp_C))
 ! wksp_C to f
 do i=2,nr-1
     do j=2,nz-1
-        RHS_thm(i,j) = (wksp_C(i,j)+wksp_C(i,j-1))/2.0
+        RHS_rpsi_thm(i,j) = (wksp_C(i,j)+wksp_C(i,j-1))/2.0
     end do
 end do
 !print *, "djdr max: " , maxval(abs(djdr))
-RHS_thm = RHS_thm * g0 / theta0
+RHS_rpsi_thm = RHS_rpsi_thm * g0 / theta0
 !print *, "djdr max: " , maxval(abs(djdr))
-call write_2Dfield(11, trim(output_folder)//"/RHS_thm.bin", RHS_thm, nr, nz)
+call write_2Dfield(11, trim(output_folder)//"/RHS_rpsi_thm-O.bin", RHS_rpsi_thm, nr, nz)
 
 
 ! ### Assign 2nt part of RHS = - 2 * r^(-2) * d(mf)/dz
-RHS_mom = 0.0
+RHS_rpsi_mom = 0.0
 do i=1,nr-1
     do j=1,nz-1
          wksp_B(i,j) = sqrt(m2(i,j)) * F_in(i,j)
@@ -333,39 +338,40 @@ call d_dz_B2A(wksp_B, wksp_A)
 do i=2,nr-1
     do j=2,nz-1
          ! Notice that 2.0 factor of averge wksp_A cancelled by another in 2*m*F
-         RHS_mom(i,j) = - (wksp_A(i,j) + wksp_A(i-1,j))/(ra(i)**2.0)
+         RHS_rpsi_mom(i,j) = - (wksp_A(i,j) + wksp_A(i-1,j))/(ra(i)**2.0)
     end do
 end do
 
     
-!print *, "RHS_mom max: " , maxval(abs(djdr))
-call write_2Dfield(11, trim(output_folder)//"/RHS_mom.bin", RHS_mom, nr, nz)
+!print *, "RHS_rpsi_mom max: " , maxval(abs(djdr))
+call write_2Dfield(11, trim(output_folder)//"/RHS_rpsi_mom-O.bin", RHS_rpsi_mom, nr, nz)
 
 
 
 print *, "Initialization complete."
 
+! TENDENCY MODE
 if(mode(1) == 0) then
-    ! ### STAGE I : invert to get psi  !
+    ! ### STAGE I : invert to get rpsi  !
     call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
-    psi = 0.0
-    if(use_psi_bc .eqv. .true.) then
-        psi = psi_bc
+    rpsi = 0.0
+    if(use_rpsi_bc .eqv. .true.) then
+        rpsi = rpsi_bc
     end if
 
-    print *, "Solving psi..."
-    f = RHS_thm + RHS_mom
-    strategy = saved_strategy_psi; strategy_r = saved_strategy_psi_r;
-    alpha = alpha_psi;
-    call solve_elliptic(max_iter_psi, strategy, strategy_r, alpha, psi, coe, f, wksp_O, nr, nz, err, 0)
+    print *, "Solving rpsi..."
+    f = RHS_rpsi_thm + RHS_rpsi_mom
+    strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
+    alpha = alpha_rpsi;
+    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, 1)
     print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-    call write_2Dfield(11, trim(output_folder)//"/psi_before.bin", psi, nr, nz)
+    call write_2Dfield(11, trim(output_folder)//"/rpsi_before-O.bin", rpsi, nr, nz)
 
     ! ### STAGE II : forcast thermal field to generate f  !
 
     ! calculate u, w and dtheta_dt
-    call psiToUW(psi, u_C, w_A)
+    call rpsiToUW(rpsi, u_C, w_A)
 
     theta = 0.0
     do i=1,nr-1
@@ -395,6 +401,7 @@ if(mode(1) == 0) then
     call d_dz_B2A(theta, wksp_A)
     a_A(:,2:nz-1) = a_A(:,2:nz-1) + g0 / theta0 * wksp_A(:,2:nz-1)
 
+    ! ABC_UPDATE
     if(mode(3) == 1) then
         ! calculate (new) solver_b
         do i=1,nr-1
@@ -405,12 +412,12 @@ if(mode(1) == 0) then
         end do
 
         ! calculate (new) solver_a
-        do i=1,nr-1
-            do j=1,nz-2
-                solver_a_A(i,j) = a_A(i,j+1)          &
-                    &  / ((ra(i)+ra(i+1))/2.0)/sigma(j+1)
-            end do
-        end do
+        !do i=1,nr-1
+        !    do j=1,nz-2
+        !        solver_a_A(i,j) = a_A(i,j+1)          &
+        !            &  / ((ra(i)+ra(i+1))/2.0)/sigma(j+1)
+        !    end do
+        !end do
     end if
 
 
@@ -428,65 +435,65 @@ do i=2,nr-1
     end do
 end do
 
-call write_2Dfield(11, trim(output_folder)//"/rhs_of_chi.bin", f, nr, nz)
+call write_2Dfield(11, trim(output_folder)//"/RHS_rchi-O.bin", f, nr, nz)
 
 print *, "Solving CHI with B=0"
 wksp_B = solver_b_B; solver_b_B = 0.0
 call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
 solver_b_B = wksp_B ! restore
 
-chi = 0.0
-if(use_chi_bc .eqv. .true.) then
-    chi = chi_bc
+rchi = 0.0
+if(use_rchi_bc .eqv. .true.) then
+    rchi = rchi_bc
 end if
 
 
-strategy = saved_strategy_chi; strategy_r = saved_strategy_chi_r;
-alpha = alpha_chi;
-call solve_elliptic(max_iter_chi, strategy, strategy_r, alpha, chi, coe, f, wksp_O, nr, nz, err, 0)
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, 1)
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-call cal_eta(chi, eta);
+call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta-nob.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/CHI-nob.bin",chi,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_without_B-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_without_B-O.bin",rchi,nr,nz)
 
 
 
 print *, "Solving CHI with B!=0"
 call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
-strategy = saved_strategy_chi; strategy_r = saved_strategy_chi_r;
-alpha = alpha_chi;
-call solve_elliptic(max_iter_chi, strategy, strategy_r, alpha, chi, coe, f, wksp_O, nr, nz, err, 0)
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, 1)
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-call cal_eta(chi, eta);
+call cal_eta(rchi, eta);
 eta_avg_b = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
-call write_2Dfield(11,trim(output_folder)//"/eta-b.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/CHI-b.bin",chi,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_with_B-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_with_B-O.bin",rchi,nr,nz)
 
 
 
 
 if(mode(4) == 1) then
     print *, "Integral check..."
-    if(use_psi_bc .eqv. .true.) then
-        psi = psi_bc
+    if(use_rpsi_bc .eqv. .true.) then
+        rpsi = rpsi_bc
     end if
 
-    print *, "Solving psi..."
-    f = RHS_thm + RHS_mom;
+    print *, "Solving rpsi..."
+    f = RHS_rpsi_thm + RHS_rpsi_mom;
     call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
-    strategy = saved_strategy_psi; strategy_r = saved_strategy_psi_r;
-    alpha = alpha_psi;
-    call solve_elliptic(max_iter_psi, strategy, strategy_r, alpha, psi, coe, f, wksp_O, nr, nz, err, 0)
+    strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
+    alpha = alpha_rpsi;
+    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, 0)
     print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-    call write_2Dfield(11, trim(output_folder)//"/psi.bin", psi, nr, nz)
+    call write_2Dfield(11, trim(output_folder)//"/rpsi-O.bin", rpsi, nr, nz)
 
-    call psiToUW(psi, u_C, w_A)
+    call rpsiToUW(rpsi, u_C, w_A)
 
     ! Update b_C for checking mode
     do i=2, nr-1
@@ -498,13 +505,13 @@ if(mode(4) == 1) then
     call relativeTheta(theta, a_A * (theta0 / g0), b_C * (- theta0 / g0))
     eta_avg_b_wtheta = cal_eta_avg_wtheta(Q_in, w_A, theta)
     print *, eta_avg_b_wtheta
-    eta_avg_b_wtheta = cal_eta_avg_wtheta2(Q_in, psi, theta)
+    eta_avg_b_wtheta = cal_eta_avg_wtheta2(Q_in, rpsi, theta)
     print *, eta_avg_b_wtheta
     call write_2Dfield(11,trim(output_folder)//"/wtheta-B.bin",wtheta,nr-1,nz-1)
 
     call write_2Dfield(11,trim(output_folder)//"/w-A.bin",w_A,nr-1,nz)
     call write_2Dfield(11,trim(output_folder)//"/u-C.bin",u_C,nr,nz-1)
-    call write_2Dfield(11,trim(output_folder)//"/theta-b.bin",theta,nr-1,nz-1)
+    call write_2Dfield(11,trim(output_folder)//"/theta-B.bin",theta,nr-1,nz-1)
 
 end if
 
@@ -517,6 +524,8 @@ end if
 open (unit=15,file=trim(output_folder)//"/efficiency.txt",action="write",status="replace")
 write (15,*) "Average Efficiency without b using Q eta   (%): ", eta_avg_nob
 write (15,*) "Average Efficiency with    b using Q eta   (%): ", eta_avg_b
+
+! ABC_UPDATE
 if(mode(3)==0) then
     write (15,*) "Average Efficiency with    b using w theta (%): ", eta_avg_b_wtheta
 end if
@@ -596,15 +605,15 @@ end do
 end subroutine
 
 
-subroutine psiToUW(from_psi, to_u, to_w)
+subroutine rpsiToUW(from_rpsi, to_u, to_w)
 implicit none
-real(4) :: from_psi(nr,nz), to_w(nr-1,nz), to_u(nr,nz-1)
+real(4) :: from_rpsi(nr,nz), to_w(nr-1,nz), to_u(nr,nz-1)
 real(4) :: r
 integer :: i,j
 
-call d_rdr_O2A(from_psi, to_w)
-call d_dz_O2C(from_psi, to_u); to_u = -to_u
-! notice gradient of psi gets momentum flux, so we need to divide it by sigma.
+call d_rdr_O2A(from_rpsi, to_w)
+call d_dz_O2C(from_rpsi, to_u); to_u = -to_u
+! notice gradient of rpsi gets momentum flux, so we need to divide it by sigma.
 do i=1,nr-1
     do j=1,nz
         to_w(i,j) = to_w(i,j)/sigma(j)
@@ -778,9 +787,9 @@ print *, "efficiency(%): ", sum_wtheta / sum_q * 100.0
 cal_eta_avg_wtheta = sum_wtheta / sum_q * 100.0
 end function
 
-real(4) function cal_eta_avg_wtheta2(Q_B, psi_O, theta_B)
+real(4) function cal_eta_avg_wtheta2(Q_B, rpsi_O, theta_B)
 implicit none
-real(4) :: Q_B(nr-1, nz-1), psi_O(nr, nz), theta_B(nr-1, nz-1)
+real(4) :: Q_B(nr-1, nz-1), rpsi_O(nr, nz), theta_B(nr-1, nz-1)
 real(4) :: sum_q, sum_wtheta, r, tmp, sum_pos, sum_neg, dr, dz
 integer :: i,j
 
@@ -793,7 +802,7 @@ do i = 1,nr-1
         dz = za(j+1) - za(j)
 
         tmp = g0 / theta0 &
-           &    * ((psi_O(i+1,j) + psi_O(i+1,j+1) - psi_O(i,j) - psi_O(i,j+1)) /2.0) &
+           &    * ((rpsi_O(i+1,j) + rpsi_O(i+1,j+1) - rpsi_O(i,j) - rpsi_O(i,j+1)) /2.0) &
            &    * theta_B(i,j) * dz
 
         sum_wtheta = sum_wtheta + tmp
@@ -815,12 +824,12 @@ cal_eta_avg_wtheta2 = sum_wtheta / sum_q * 100.0
 end function
 
 
-subroutine cal_eta(chi, eta)
+subroutine cal_eta(rchi, eta)
 implicit none
-real(4) :: chi(nr,nz), eta(nr-1,nz)
+real(4) :: rchi(nr,nz), eta(nr-1,nz)
 integer :: i,j
 
-call d_rdr_O2A(chi, eta)
+call d_rdr_O2A(rchi, eta)
 
 do i=1,nr-1
     do j=1,nz

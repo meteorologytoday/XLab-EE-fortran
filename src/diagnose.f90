@@ -441,7 +441,12 @@ end do
 
 call write_2Dfield(11, trim(output_folder)//"/RHS_rchi-O.bin", f, nr, nz)
 
-print *, "Solving CHI with B=0"
+print *, "Solving CHI with L(A,B= 0   ,C) = -dB"
+print *, "Solving CHI with L(A,B= 0   ,C) = - B"
+print *, "Solving CHI with L(A,B=B0   ,C) = -dB"
+print *, "Solving CHI with L(A,B=B0   ,C) = - B"
+print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"
+print *, "Solving CHI with L(A,B=B0+dB,C) = - B"
 wksp_B = solver_b_B; solver_b_B = 0.0
 call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
 solver_b_B = wksp_B ! restore

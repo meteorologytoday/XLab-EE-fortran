@@ -28,15 +28,17 @@ character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_f
 
 
 real(4), pointer   :: rpsi(:,:), rchi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
-&                     F_in(:,:),                                           &
-&                     a_in(:,:), b_in(:,:), c_in(:,:),                     &
-&                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),  &
-&                     solver_a_A(:,:), solver_b_B(:,:), solver_c_C(:,:),   &
-&                     JJ_B(:,:), RHS_rpsi_thm(:,:), RHS_rpsi_mom(:,:),     &
-&                     a_A(:,:), b_B(:,:), b_C(:,:), c_C(:,:),              &
-&                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),   &
-&                     ra(:), za(:), exner(:), sigma(:),                    &
-&                     rpsi_bc(:,:), rchi_bc(:,:), wtheta(:,:)
+&                     F_in(:,:),                                             &
+&                     a_in(:,:), b_in(:,:), c_in(:,:),                       &
+&                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),    &
+&                     solver_a_A(:,:), solver_b_B(:,:), solver_c_C(:,:),     &
+&                     solver_b_basic_B(:,:), solver_B_anomaly_B(:,:),        &
+&                     JJ_B(:,:), RHS_rpsi_thm(:,:), RHS_rpsi_mom(:,:),       &
+&                     a_A(:,:), b_B(:,:), b_C(:,:), c_C(:,:),                &
+&                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),     &
+&                     ra(:), za(:), exner(:), sigma(:),                      & 
+&                     rpsi_bc(:,:), rchi_bc(:,:), wtheta(:,:), f_basic(:,:), &
+&                     f_anomaly(:,:), b_basic_B(:,:), b_anomaly_B(:,:)
 
 real(4)            :: testing_dt, Lr, Lz, dr, dz, eta_avg_b, eta_avg_nob,  &
                       time_beg, time_end
@@ -178,12 +180,18 @@ allocate(wksp_O(nr,nz));
 allocate(wksp_A(nr-1,nz));
 allocate(wksp_B(nr-1,nz-1));
 allocate(wksp_C(nr,nz-1));
+allocate(f_basic(nr,nz));
+allocate(f_anomaly(nr,nz));
 
 allocate(coe(9,nr,nz));
 allocate(a_in(nr, nz));  allocate(b_in(nr, nz));   allocate(c_in(nr, nz));
 allocate(a_A(nr-1, nz)); allocate(b_C(nr, nz-1));  allocate(b_B(nr-1,nz-1));
-allocate(c_C(nr, nz-1));
+allocate(c_C(nr, nz-1)); 
+allocate(b_basic_B(nr-1,nz-1));                    allocate(b_anomaly_B(nr-1,nz-1));
+
 allocate(solver_a_A(nr-1, nz-2)); allocate(solver_b_B(nr-1, nz-1));allocate(solver_c_C(nr-2, nz-1));
+allocate(solver_b_basic_B(nr-1, nz-1));
+allocate(solver_b_anomaly_B(nr-1, nz-1));
 allocate(wtheta(nr-1,nz-1));
 allocate(w_A(nr-1,nz)); allocate(u_C(nr,nz-1));
 allocate(theta(nr-1,nz-1)); allocate(eta(nr-1,nz)); allocate(m2(nr-1,nz-1));
@@ -241,6 +249,8 @@ do i=1,nr-1
     end do
 end do
 
+solver_b_basic_B = solver_b_B
+
 do i=1,nr-2
     do j=1,nz-1
         solver_c_C(i,j) = (c_in(i+1,j) + c_in(i+1,j+1))         &
@@ -280,6 +290,8 @@ do i=1,nr-1
             &      + b_in(i  ,j+1) + b_in(i+1,j+1) ) /4.0
     end do
 end do
+
+b_basic_B = b_B ! Copy basic state
 
 do i=1,nr
     do j=1,nz-1
@@ -398,64 +410,61 @@ if(mode(1) == 0) then
     ! Calculate forced B field, A and C assumed to be unperturbed for now
     ! dtheta/dr for f
     call d_dr_B2B(theta, wksp_B)
-    b_B = b_B - g0 / theta0 * wksp_B
+    b_anomaly_B = -g0/theta0 * wksp_B ! Copy anomaly
+    b_B = b_B + b_anomaly_B
     
     ! Notice that solver only needs 2:nz-1,
     ! so the value of a_A on top and boundary is not important.
+    ! recalculate a_A is for the checking step
     call d_dz_B2A(theta, wksp_A)
     a_A(:,2:nz-1) = a_A(:,2:nz-1) + g0 / theta0 * wksp_A(:,2:nz-1)
 
-    ! ABC_UPDATE
-    if(mode(3) == 1) then
-        ! calculate (new) solver_b
-        do i=1,nr-1
-            do j=1,nz-1
-            solver_b_B(i,j) = b_B(i,j)          &
-                &  / ((ra(i)+ra(i+1))/2.0)/((sigma(j)+sigma(j+1))/2.0)
-            end do
+    do i=1,nr-1
+        do j=1,nz-1
+            solver_b_anomaly_B(i,j) = b_anomaly_B(i,j)          &
+            &  / ((ra(i)+ra(i+1))/2.0)/((sigma(j)+sigma(j+1))/2.0)
         end do
+    end do
 
-        ! calculate (new) solver_a
-        !do i=1,nr-1
-        !    do j=1,nz-2
-        !        solver_a_A(i,j) = a_A(i,j+1)          &
-        !            &  / ((ra(i)+ra(i+1))/2.0)/sigma(j+1)
-        !    end do
-        !end do
-    end if
-
-
-    !call write_2Dfield(11, trim(output_folder)//"/coe-new-b.bin", b_B, nr-1, nz-1)
 end if
 ! ### STAGE III : Solve !
 
 ! doing right hand side
+f_basic = 0; f_anomaly = 0;
 do i=2,nr-1
     do j=2,nz-1
-        f(i,j) = - ( b_B(i-1,j-1) &
-            &      + b_B(i-1,j  ) &
-            &      + b_B(i  ,j  ) &
-            &      + b_B(i  ,j-1) )/4.0
+        f_basic(i,j) = - ( b_basic_B(i-1,j-1) &
+            &      + b_basic_B(i-1,j  ) &
+            &      + b_basic_B(i  ,j  ) &
+            &      + b_basic_B(i  ,j-1) )/4.0
+
+        f_anomaly(i,j) = - ( b_anomaly_B(i-1,j-1) &
+            &      + b_anomaly_B(i-1,j  ) &
+            &      + b_anomaly_B(i  ,j  ) &
+            &      + b_anomaly_B(i  ,j-1) )/4.0
+ 
     end do
 end do
 
 call write_2Dfield(11, trim(output_folder)//"/RHS_rchi-O.bin", f, nr, nz)
 
-print *, "Solving CHI with L(A,B= 0   ,C) = -dB"
-print *, "Solving CHI with L(A,B= 0   ,C) = - B"
+
 print *, "Solving CHI with L(A,B=B0   ,C) = -dB"
-print *, "Solving CHI with L(A,B=B0   ,C) = - B"
+print *, "Solving CHI with L(A,B=B0   ,C) = -B0"
 print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"
-print *, "Solving CHI with L(A,B=B0+dB,C) = - B"
-wksp_B = solver_b_B; solver_b_B = 0.0
-call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
-solver_b_B = wksp_B ! restore
+print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
+
+
 
 rchi = 0.0
 if(use_rchi_bc .eqv. .true.) then
     rchi = rchi_bc
 end if
 
+!==================================================================================
+print *, "Solving CHI with L(A,B=0,C) = -B0"
+solver_b_B = 0.0; f = f_basic;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
 
 strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
 alpha = alpha_rchi;
@@ -467,13 +476,14 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_without_B-O.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi_without_B-O.bin",rchi,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[0_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[0_B0]-O.bin",rchi,nr,nz)
 
-
-
-print *, "Solving CHI with B!=0"
+!==================================================================================
+print *, "Solving CHI with L(A,B=0,C) = -dB"
+solver_b_B = 0.0; f = f_anomaly;
 call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
 strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
 alpha = alpha_rchi;
 call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
@@ -481,13 +491,85 @@ call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wk
 print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
 call cal_eta(rchi, eta);
-eta_avg_b = cal_eta_avg(Q_in, eta)
+eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
-call write_2Dfield(11,trim(output_folder)//"/eta_with_B-O.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi_with_B-O.bin",rchi,nr,nz)
 
+call write_2Dfield(11,trim(output_folder)//"/eta_[0_dB]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[0_dB]-O.bin",rchi,nr,nz)
 
+!==================================================================================
+print *, "Solving CHI with L(A,B=B0,C) = -B0"
+solver_b_B = solver_b_basic_B; f = f_basic;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
 
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
+print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+call cal_eta(rchi, eta);
+eta_avg_nob = cal_eta_avg(Q_in, eta)
+eta = eta * 100.0 ! in percent
+
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[B0_B0]-O.bin",rchi,nr,nz)
+
+!==================================================================================
+print *, "Solving CHI with L(A,B=B0,C) = -dB"
+solver_b_B = solver_b_basic_B; f = f_anomaly;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
+print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+call cal_eta(rchi, eta);
+eta_avg_nob = cal_eta_avg(Q_in, eta)
+eta = eta * 100.0 ! in percent
+
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0_dB]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[B0_dB]-O.bin",rchi,nr,nz)
+
+!==================================================================================
+print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
+solver_b_B = solver_b_basic_B + solver_b_anomaly_B; f = f_basic;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
+print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+call cal_eta(rchi, eta);
+eta_avg_nob = cal_eta_avg(Q_in, eta)
+eta = eta * 100.0 ! in percent
+
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_dB]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_dB]-O.bin",rchi,nr,nz)
+
+!==================================================================================
+print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"
+solver_b_B = solver_b_basic_B + solver_b_anomaly_B; f = f_anomaly;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
+print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+call cal_eta(rchi, eta);
+eta_avg_nob = cal_eta_avg(Q_in, eta)
+eta = eta * 100.0 ! in percent
+
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_dB]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_dB]-O.bin",rchi,nr,nz)
+
+!==================================================================================
 
 if(mode(4) == 1) then
     print *, "Integral check..."

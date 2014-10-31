@@ -548,8 +548,8 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_dB]-O.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_dB]-O.bin",rchi,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_B0]-O.bin",rchi,nr,nz)
 
 !==================================================================================
 print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"

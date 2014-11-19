@@ -456,11 +456,50 @@ print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
 
 
 
-rchi = 0.0
+
+!==================================================================================
+
 if(use_rchi_bc .eqv. .true.) then
     rchi = rchi_bc
+    print *, "Solving CHI with L(A,B=0,C) = 0 with boundary condition"
+    solver_b_B = 0.0; f = 0;
+    call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+    alpha = alpha_rchi;
+    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+    call cal_eta(rchi, eta);
+    eta_avg_nob = cal_eta_avg(Q_in, eta)
+    eta = eta * 100.0 ! in percent
+
+    call write_2Dfield(11,trim(output_folder)//"/eta_[0_0]-O.bin",eta,nr,nz)
+    call write_2Dfield(11,trim(output_folder)//"/rchi_[0_0]-O.bin",rchi,nr,nz)
+
+
+    print *, "Solving CHI with L(A,B=B0+dB,C) = 0 with boundary condition"
+    solver_b_B = solver_b_basic_B + solver_b_anomaly_B; f = 0;
+    call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+    alpha = alpha_rchi;
+    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+    call cal_eta(rchi, eta);
+    eta_avg_nob = cal_eta_avg(Q_in, eta)
+    eta = eta * 100.0 ! in percent
+
+    call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_0]-O.bin",eta,nr,nz)
+    call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_0]-O.bin",rchi,nr,nz)
+
+
 end if
 
+rchi = 0.0
 !==================================================================================
 print *, "Solving CHI with L(A,B=0,C) = -B0"
 solver_b_B = 0.0; f = f_basic;

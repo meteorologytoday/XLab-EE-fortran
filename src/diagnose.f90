@@ -446,12 +446,15 @@ do i=2,nr-1
     end do
 end do
 
+f = f_basic + f_anomaly;
 call write_2Dfield(11, trim(output_folder)//"/RHS_rchi-O.bin", f, nr, nz)
 
 
+
+! The order of the following is such that the initial guessing field is better.
 print *, "Solving CHI with L(A,B=B0   ,C) = -dB"
-print *, "Solving CHI with L(A,B=B0   ,C) = -B0"
 print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"
+print *, "Solving CHI with L(A,B=B0   ,C) = -B0"
 print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
 
 
@@ -501,24 +504,6 @@ end if
 
 rchi = 0.0
 !==================================================================================
-print *, "Solving CHI with L(A,B=0,C) = -B0"
-solver_b_B = 0.0; f = f_basic;
-call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta);
-eta_avg_nob = cal_eta_avg(Q_in, eta)
-eta = eta * 100.0 ! in percent
-
-call write_2Dfield(11,trim(output_folder)//"/eta_[0_B0]-O.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi_[0_B0]-O.bin",rchi,nr,nz)
-
-!==================================================================================
 print *, "Solving CHI with L(A,B=0,C) = -dB"
 solver_b_B = 0.0; f = f_anomaly;
 call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
@@ -535,24 +520,6 @@ eta = eta * 100.0 ! in percent
 
 call write_2Dfield(11,trim(output_folder)//"/eta_[0_dB]-O.bin",eta,nr,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[0_dB]-O.bin",rchi,nr,nz)
-
-!==================================================================================
-print *, "Solving CHI with L(A,B=B0,C) = -B0"
-solver_b_B = solver_b_basic_B; f = f_basic;
-call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta);
-eta_avg_nob = cal_eta_avg(Q_in, eta)
-eta = eta * 100.0 ! in percent
-
-call write_2Dfield(11,trim(output_folder)//"/eta_[B0_B0]-O.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi_[B0_B0]-O.bin",rchi,nr,nz)
 
 !==================================================================================
 print *, "Solving CHI with L(A,B=B0,C) = -dB"
@@ -573,24 +540,6 @@ call write_2Dfield(11,trim(output_folder)//"/eta_[B0_dB]-O.bin",eta,nr,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[B0_dB]-O.bin",rchi,nr,nz)
 
 !==================================================================================
-print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
-solver_b_B = solver_b_basic_B + solver_b_anomaly_B; f = f_basic;
-call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta);
-eta_avg_nob = cal_eta_avg(Q_in, eta)
-eta = eta * 100.0 ! in percent
-
-call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_B0]-O.bin",eta,nr,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_B0]-O.bin",rchi,nr,nz)
-
-!==================================================================================
 print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"
 solver_b_B = solver_b_basic_B + solver_b_anomaly_B; f = f_anomaly;
 call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
@@ -607,6 +556,61 @@ eta = eta * 100.0 ! in percent
 
 call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_dB]-O.bin",eta,nr,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_dB]-O.bin",rchi,nr,nz)
+
+rchi = 0.0;
+!==================================================================================
+print *, "Solving CHI with L(A,B=0,C) = -B0"
+solver_b_B = 0.0; f = f_basic;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
+print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+call cal_eta(rchi, eta);
+eta_avg_nob = cal_eta_avg(Q_in, eta)
+eta = eta * 100.0 ! in percent
+
+call write_2Dfield(11,trim(output_folder)//"/eta_[0_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[0_B0]-O.bin",rchi,nr,nz)
+
+!==================================================================================
+print *, "Solving CHI with L(A,B=B0,C) = -B0"
+solver_b_B = solver_b_basic_B; f = f_basic;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
+print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+call cal_eta(rchi, eta);
+eta_avg_nob = cal_eta_avg(Q_in, eta)
+eta = eta * 100.0 ! in percent
+
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[B0_B0]-O.bin",rchi,nr,nz)
+
+!==================================================================================
+print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
+solver_b_B = solver_b_basic_B + solver_b_anomaly_B; f = f_basic;
+call cal_coe(solver_a_A, solver_b_B, solver_c_C, coe, dr, dz, nr, nz, err)
+
+strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+alpha = alpha_rchi;
+call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+    & merge(1,0,debug_mode .eqv. .true.))
+print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+call cal_eta(rchi, eta);
+eta_avg_nob = cal_eta_avg(Q_in, eta)
+eta = eta * 100.0 ! in percent
+
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_B0]-O.bin",rchi,nr,nz)
 
 !==================================================================================
 

@@ -478,7 +478,7 @@ if(use_rchi_bc .eqv. .true.) then
     eta_avg_nob = cal_eta_avg(Q_in, eta)
     eta = eta * 100.0 ! in percent
 
-    call write_2Dfield(11,trim(output_folder)//"/eta_[0_0]-O.bin",eta,nr,nz)
+    call write_2Dfield(11,trim(output_folder)//"/eta_[0_0]-A.bin",eta,nr-1,nz)
     call write_2Dfield(11,trim(output_folder)//"/rchi_[0_0]-O.bin",rchi,nr,nz)
 
 
@@ -496,7 +496,7 @@ if(use_rchi_bc .eqv. .true.) then
     eta_avg_nob = cal_eta_avg(Q_in, eta)
     eta = eta * 100.0 ! in percent
 
-    call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_0]-O.bin",eta,nr,nz)
+    call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_0]-A.bin",eta,nr-1,nz)
     call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_0]-O.bin",rchi,nr,nz)
 
 
@@ -518,7 +518,7 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_[0_dB]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[0_dB]-A.bin",eta,nr-1,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[0_dB]-O.bin",rchi,nr,nz)
 
 !==================================================================================
@@ -536,7 +536,7 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_[B0_dB]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0_dB]-A.bin",eta,nr-1,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[B0_dB]-O.bin",rchi,nr,nz)
 
 !==================================================================================
@@ -554,7 +554,7 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_dB]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_dB]-A.bin",eta,nr-1,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_dB]-O.bin",rchi,nr,nz)
 
 rchi = 0.0;
@@ -573,7 +573,7 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_[0_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[0_B0]-A.bin",eta,nr-1,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[0_B0]-O.bin",rchi,nr,nz)
 
 !==================================================================================
@@ -591,7 +591,7 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_[B0_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0_B0]-A.bin",eta,nr-1,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[B0_B0]-O.bin",rchi,nr,nz)
 
 !==================================================================================
@@ -609,7 +609,7 @@ call cal_eta(rchi, eta);
 eta_avg_nob = cal_eta_avg(Q_in, eta)
 eta = eta * 100.0 ! in percent
 
-call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_B0]-O.bin",eta,nr,nz)
+call write_2Dfield(11,trim(output_folder)//"/eta_[B0dB_B0]-A.bin",eta,nr-1,nz)
 call write_2Dfield(11,trim(output_folder)//"/rchi_[B0dB_B0]-O.bin",rchi,nr,nz)
 
 !==================================================================================

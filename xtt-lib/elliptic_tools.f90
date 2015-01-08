@@ -142,7 +142,7 @@ real(4), intent(inout) :: strategy_r
 real(4), intent(in)    :: coe(9, nx, ny), f(nx, ny), alpha
 integer, intent(in)    :: max_iter, nx, ny
 integer, intent(inout) :: strategy, err
-integer                :: debug, converge_cnt
+integer                :: debug, converge_cnt, lose_chance_cnt
 
 integer :: i,j,cnt, tmp_err
 integer :: check_step
@@ -154,6 +154,7 @@ logical :: flag ! after every [check_step] iterations this flag will be turned o
 print *, "alpha: ", alpha
 print *, "debug: ", debug
 converge_cnt = 0
+lose_chance_cnt = 0
 
 err_before=Huge(err_before)
 check_step = 100
@@ -234,9 +235,20 @@ do cnt=1, max_iter
                 print *, "Error = 0, hardly to see this!"
             else if(abs(ratio) < strategy_r) then
                 converge_cnt = converge_cnt + 1
+                lose_chance_cnt = 0
                 print *, "converge_cnt: ", converge_cnt
                 if(converge_cnt >= 10)  then
                     err = 0
+                end if
+            else
+                if(converge_cnt > 0) then
+                    lose_chance_cnt = lose_chance_cnt + 1
+                
+                    if(lose_chance_cnt >= 5) then
+                        converge_cnt = converge_cnt - 1
+                        lose_chance_cnt = 0
+                        print *, "Lose one count! converge_cnt now is: ", converge_cnt
+                    end if
                 end if
             end if
             err_before = err_now

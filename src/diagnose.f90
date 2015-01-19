@@ -106,14 +106,6 @@ else
     stop
 end if
 
-!if(word(4) == 'INTEGRAL_CHECK') then
-!    mode(4) = 1
-!else if(word(4) == 'INTEGRAL_NOCHECK') then
-!    mode(4) = 0
-!else
-!    print *, "Unknown Mode :", trim(word(4))
-!    stop
-!end if
 
 if(mode(1) == 0) then
     call read_input(stdin, buffer); read(buffer, *) testing_dt
@@ -779,35 +771,38 @@ call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[B0dB]-B.bin",wthet
 ! Exchange conversion term check !
 
 
-call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[0_0]-O.bin", rchi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[0_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call read_2Dfield(15, trim(output_folder)//"/rchi-[0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_0)
-call write_2Dfield(11,trim(output_folder)//"/bndconv-[0].bin", bndconv,nr-1,2)
+if(use_rchi_bc .eqv. .true.) then
 
-call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0]-O.bin", rpsi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_0]-O.bin", rchi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_B0)
-call write_2Dfield(11,trim(output_folder)//"/bndconv-[B0].bin", bndconv,nr-1,2)
+    print *, "Exchange conversion term check..."
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_0]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_0)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv-[0].bin", bndconv,nr-1,2)
 
-call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[dB]-O.bin", rpsi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_0]-O.bin", rchi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_dB)
-call write_2Dfield(11,trim(output_folder)//"/bndconv-[dB].bin", bndconv,nr-1,2)
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_0]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_B0)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv-[B0].bin", bndconv,nr-1,2)
 
-call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_0]-O.bin", rchi, nr, nz)
-call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_B0dB)
-call write_2Dfield(11,trim(output_folder)//"/bndconv-[B0dB].bin", bndconv,nr-1,2)
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[dB]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_0]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_dB)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv-[dB].bin", bndconv,nr-1,2)
 
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_0]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_B0dB)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv-[B0dB].bin", bndconv,nr-1,2)
 
+end if
 
 
 
@@ -837,11 +832,13 @@ write (15,*) "eta [L(B=dB)   = B0]     wo/ boundary : ", sum_Qeta_dB_B0, ", ", (
 write (15,*) "eta [L(B=B0)   = B0]     wo/ boundary : ", sum_Qeta_B0_B0, ", ", (sum_Qeta_B0_B0 / sum_Q)
 write (15,*) "eta [L(B=B0dB) = B0]     wo/ boundary : ", sum_Qeta_B0dB_B0, ", ", (sum_Qeta_B0dB_B0 / sum_Q)
 
-write (15,*) "# Boundary conversion"
-write (15,*) "bndconv [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv_0, ", ", (sum_bndconv_0 / sum_Q)
-write (15,*) "bndconv [L(B=dB) = B0dB]  w/ boundary : ", sum_bndconv_dB, ", ", (sum_bndconv_dB / sum_Q)
-write (15,*) "bndconv [L(B=B0) = B0dB]  w/ boundary : ", sum_bndconv_B0, ", ", (sum_bndconv_B0 / sum_Q)
-write (15,*) "bndconv [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv_B0dB, ", ", (sum_bndconv_B0dB / sum_Q)
+if(use_rchi_bc .eqv. .true.) then
+    write (15,*) "# Boundary conversion"
+    write (15,*) "bndconv [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv_0, ", ", (sum_bndconv_0 / sum_Q)
+    write (15,*) "bndconv [L(B=dB) = B0dB]  w/ boundary : ", sum_bndconv_dB, ", ", (sum_bndconv_dB / sum_Q)
+    write (15,*) "bndconv [L(B=B0) = B0dB]  w/ boundary : ", sum_bndconv_B0, ", ", (sum_bndconv_B0 / sum_Q)
+    write (15,*) "bndconv [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv_B0dB, ", ", (sum_bndconv_B0dB / sum_Q)
+end if
 
 
 write (15,*) "# wtheta integral"

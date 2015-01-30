@@ -32,7 +32,7 @@ do while(loop_end .eqv. .false.)
     end if
     
 end do
-print *, 'result: ', trim(buffer)
+!print *, 'result: ', trim(buffer)
 line = trim(buffer)
 
 end subroutine

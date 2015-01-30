@@ -1156,7 +1156,7 @@ do i=1, nr-1
     &     ( (rpsi(i,nz) + rpsi(i+1,nz) - rpsi(i,nz-1) - rpsi(i+1,nz-1))/(2.0*dz)) ) &
     &    / r**2.0
 
-    sum_bndconv = sum_bndconv + (bndconv(i,2) - bndconv(i,1)) * r * dr
+    sum_bndconv = sum_bndconv - (bndconv(i,2) - bndconv(i,1)) * r * dr
 end do
 
 

@@ -1,4 +1,7 @@
 module elliptic_tools
+implicit none
+integer, parameter :: err_over_max_iteration = ISHFT(1,0), &
+    &                 err_explode = ISHFT(1,1)
 
 contains
 
@@ -149,16 +152,18 @@ integer :: check_step
 real(4) :: tmp_r, err_now, err_before, stg3_max_err, ratio 
 
 real(4), pointer :: fr_dat(:,:), to_dat(:,:), tmp_ptr(:,:)
-logical :: flag ! after every [check_step] iterations this flag will be turned on. 
+logical :: stop_iteration, flag ! after every [check_step] iterations this flag will be turned on. 
 
-print *, "alpha: ", alpha
-print *, "debug: ", debug
+if (debug == 1) then
+    print *, "alpha: ", alpha
+    print *, "debug: ", debug
+end if
 converge_cnt = 0
 lose_chance_cnt = 0
 
 err_before=Huge(err_before)
 check_step = 100
-err = 1
+err = 0
 
 workspace(1, 1:ny) = dat(1,1:ny)
 workspace(nx,1:ny) = dat(nx,1:ny)
@@ -170,6 +175,7 @@ workspace = dat
 fr_dat => workspace
 to_dat => dat
 
+stop_iteration = .false.
 do cnt=1, max_iter
 
     if(mod(cnt,check_step) == 0) then
@@ -208,16 +214,25 @@ do cnt=1, max_iter
     do i = 2,nx-1
         do j = 2,ny-1
             if((isnan(coe(5,i,j)) .eqv. .true.)) then
-                print *, "coe is nan at (",i,",",j,")"
-                stop
+                stop_iteration = .true.
+                err = IOR(err, err_explode)
+                if(debug == 1) then
+                    print *, "coe is nan at (",i,",",j,")"
+                end if
             end if
             if(isnan(fr_dat(i,j)) .eqv. .true.) then
-                print *, "fr_dat is nan at (",i,",",j,")"
-                stop
+                stop_iteration = .true.
+                err = IOR(err, err_explode)
+                if(debug == 1) then
+                    print *, "fr_dat is nan at (",i,",",j,")"
+                end if
             end if
             if(isnan(to_dat(i,j)) .eqv. .true.) then
-                print *, "to_dat is nan at (",i,",",j,")"
-                stop
+                stop_iteration = .true.
+                err = IOR(err, err_explode)
+                if(debug == 1) then
+                    print *, "to_dat is nan at (",i,",",j,")"
+                end if
             end if
 
             to_dat(i,j) = fr_dat(i,j) + alpha * to_dat(i,j) / (- coe(5,i,j))
@@ -227,18 +242,22 @@ do cnt=1, max_iter
     if(flag .eqv. .true.) then
         if(strategy == 1 .or. strategy == 3) then
             if(err_now < strategy_r) then
-                err = 0
+                stop_iteration = .true.
             end if
         else if(strategy == 2 .or. strategy == 4) then
             if(err_before == 0) then
-                err = 0
-                print *, "Error = 0, hardly to see this!"
+                stop_iteration = .true.
+                if(debug == 1) then
+                    print *, "Error = 0, hardly to see this!"
+                end if
             else if(abs(ratio) < strategy_r) then
                 converge_cnt = converge_cnt + 1
                 lose_chance_cnt = 0
-                print *, "converge_cnt: ", converge_cnt
+                if(debug == 1) then
+                    print *, "converge_cnt: ", converge_cnt
+                end if
                 if(converge_cnt >= 10)  then
-                    err = 0
+                    stop_iteration = .true.
                 end if
             else
                 if(converge_cnt > 0) then
@@ -247,18 +266,27 @@ do cnt=1, max_iter
                     if(lose_chance_cnt >= 5) then
                         converge_cnt = converge_cnt - 1
                         lose_chance_cnt = 0
-                        print *, "Lose one count! converge_cnt now is: ", converge_cnt
+                        if(debug == 1) then
+                            print *, "Lose one count! converge_cnt now is: ", converge_cnt
+                        end if
                     end if
                 end if
             end if
             err_before = err_now
         end if
-
-        if(err == 0 .or. cnt == max_iter) then
+        if(cnt == max_iter) then
+            stop_iteration = .true.
+            err = IOR(err, err_over_max_iteration)
+            if(debug == 1) then
+                print *, "Max iteration reached. Exit iteration."
+            end if
+        end if
+        if(stop_iteration .eqv. .true.) then
             if(debug == 1) then
                 print *, "iteration : ", cnt, ", err_avg = ", err_now, "fr_dat: "
             end if
             strategy = cnt; strategy_r = err_now
+            call judge_error(err)
             exit
         end if
     end if
@@ -336,6 +364,33 @@ print *, "out"
 if(associated(to_dat, psi) .eqv. .false.) then
     print *,"to_dat is not associated with psi"
     psi(:,:) = workspace(:,:)
+end if
+end subroutine
+
+subroutine judge_error(err)
+implicit none
+integer, intent(in) :: err
+logical :: known_err
+
+known_err = .false.
+
+if(err == 0) then
+    print *, "Elliptic Tools: Iteration success."
+    known_err = .true.
+end if
+
+if(IAND(err, err_over_max_iteration) /= 0) then
+    print *, "Elliptic Tools: [Error] Max iteration reached."
+    known_err = .true.
+end if
+
+if(IAND(err, err_explode) /= 0) then
+    print *, "Elliptic Tools: [Error] Iteration explodes."
+    known_err = .true.
+end if
+
+if(known_err .eqv. .false.) then
+    print *, "Elliptic Tools: Unknown error code ", err
 end if
 end subroutine
 

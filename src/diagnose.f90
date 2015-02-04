@@ -840,6 +840,21 @@ if(use_rchi_bc .eqv. .true.) then
     write (15,*) "bndconv [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv_B0dB, ", ", (sum_bndconv_B0dB / sum_Q)
 end if
 
+write (15,*) "# Decomposition sum"
+
+tmp1 = sum_Qeta_0_0 + sum_Qeta_0_dB + sum_Qeta_0_B0
+if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_0; end if
+write (15,*) "etaQ [L(B=0)    = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
+tmp1 = sum_Qeta_dB_0 + sum_Qeta_dB_dB + sum_Qeta_dB_B0
+if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_dB; end if
+write (15,*) "etaQ [L(B=B0)   = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
+tmp1 = sum_Qeta_B0_0 + sum_Qeta_B0_dB + sum_Qeta_B0_B0
+if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_B0; end if
+write (15,*) "etaQ [L(B=dB)   = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
+tmp1 = sum_Qeta_B0dB_0 + sum_Qeta_B0dB_dB + sum_Qeta_B0dB_B0
+if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_B0dB; end if
+write (15,*) "etaQ [L(B=B0dB) = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
+
 
 write (15,*) "# wtheta integral"
 

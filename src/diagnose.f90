@@ -56,7 +56,8 @@ real(4) :: r, z, tmp1, tmp2, tmp3, &
 &          sum_Qeta_0_dB , sum_Qeta_dB_dB , sum_Qeta_B0_dB , sum_Qeta_B0dB_dB, &
 &          sum_Qeta_0_B0 , sum_Qeta_dB_B0 , sum_Qeta_B0_B0 , sum_Qeta_B0dB_B0, &
 &          sum_wtheta_0_JF, sum_wtheta_dB_JF, sum_wtheta_B0_JF, sum_wtheta_B0dB_JF, &
-&          sum_bndconv_0, sum_bndconv_dB, sum_bndconv_B0, sum_bndconv_B0dB
+&          sum_bndconv_0, sum_bndconv_dB, sum_bndconv_B0, sum_bndconv_B0dB, &
+&          sum_bndconv2_0,sum_bndconv2_dB,sum_bndconv2_B0,sum_bndconv2_B0dB
 
 logical :: file_exists, use_rchi_bc, use_rpsi_bc, debug_mode
 
@@ -805,6 +806,37 @@ if(use_rchi_bc .eqv. .true.) then
 end if
 
 
+! Boundary conversion method 2 !
+if(use_rchi_bc .eqv. .true.) then
+
+    print *, "Exchange conversion term check..."
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_dB]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_0)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[0].bin", bndconv,nr-1,2)
+
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_dB]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_B0)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[B0].bin", bndconv,nr-1,2)
+
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[dB]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_dB]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_dB)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[dB].bin", bndconv,nr-1,2)
+
+    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_dB]-O.bin", rchi, nr, nz)
+    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_B0dB)
+    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[B0dB].bin", bndconv,nr-1,2)
+
+end if
+
+
 
 
 call cpu_time(time_end)
@@ -833,11 +865,18 @@ write (15,*) "eta [L(B=B0)   = B0]     wo/ boundary : ", sum_Qeta_B0_B0, ", ", (
 write (15,*) "eta [L(B=B0dB) = B0]     wo/ boundary : ", sum_Qeta_B0dB_B0, ", ", (sum_Qeta_B0dB_B0 / sum_Q)
 
 if(use_rchi_bc .eqv. .true.) then
-    write (15,*) "# Boundary conversion"
+    write (15,*) "# Boundary conversion (Method 1)"
     write (15,*) "bndconv [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv_0, ", ", (sum_bndconv_0 / sum_Q)
     write (15,*) "bndconv [L(B=dB) = B0dB]  w/ boundary : ", sum_bndconv_dB, ", ", (sum_bndconv_dB / sum_Q)
     write (15,*) "bndconv [L(B=B0) = B0dB]  w/ boundary : ", sum_bndconv_B0, ", ", (sum_bndconv_B0 / sum_Q)
     write (15,*) "bndconv [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv_B0dB, ", ", (sum_bndconv_B0dB / sum_Q)
+
+    write (15,*) "# Boundary conversion (Method 2)"
+    write (15,*) "bndconv2 [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv2_0, ", ", (sum_bndconv2_0 / sum_Q)
+    write (15,*) "bndconv2 [L(B=dB) = B0dB]  w/ boundary : ", sum_bndconv2_dB, ", ", (sum_bndconv2_dB / sum_Q)
+    write (15,*) "bndconv2 [L(B=B0) = B0dB]  w/ boundary : ", sum_bndconv2_B0, ", ", (sum_bndconv2_B0 / sum_Q)
+    write (15,*) "bndconv2 [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv2_B0dB, ", ", (sum_bndconv2_B0dB / sum_Q)
+
 end if
 
 write (15,*) "# Decomposition sum"

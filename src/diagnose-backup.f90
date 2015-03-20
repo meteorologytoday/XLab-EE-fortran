@@ -3,15 +3,13 @@ use elliptic_tools
 use field_tools
 use constants
 use read_input_tools
-use error_tools
 implicit none
 
-real(4), parameter :: MATH_PI = acos(-1.0)
 integer, parameter :: stdin=5, fd=15
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_folder, &
 &                 output_file, yes_or_no, rchi_bc_file, rpsi_bc_file, mode_str,          &
-&                 word(4), buffer
+&                 word(3), buffer
 
 
 
@@ -29,21 +27,21 @@ character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_f
 !
 
 
-real(4), pointer   :: rpsi(:,:), rchi(:,:), f(:,:), Q_in(:,:), coe(:, :, :),   &
-&                     F_in(:,:),                                               &
-&                     rhoA_in(:,:), rhoB_in(:,:), rhoC_in(:,:),                &
-&                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),      &
-&                     solverA_A(:,:), solverB_B(:,:), solverC_C(:,:),          &
-&                     solver_b_basic_B(:,:), solver_B_anomaly_B(:,:),          &
-&                     JJ_B(:,:), RHS_rpsi_thm(:,:), RHS_rpsi_mom(:,:),         &
-&                     rhoA_A(:,:), rhoB_B(:,:), rhoB_C(:,:), rhoC_C(:,:),      &
-&                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),       &
-&                     ra(:), ranga(:), za(:), exner(:), rho(:),                &
+real(4), pointer   :: rpsi(:,:), rchi(:,:), f(:,:), Q_in(:,:), coe(:, :, :), &
+&                     F_in(:,:),                                             &
+&                     rhoA_in(:,:), rhoB_in(:,:), rhoC_in(:,:),                       &
+&                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),    &
+&                     solverA_A(:,:), solverB_B(:,:), solverC_C(:,:),     &
+&                     solver_b_basic_B(:,:), solver_B_anomaly_B(:,:),        &
+&                     JJ_B(:,:), RHS_rpsi_thm(:,:), RHS_rpsi_mom(:,:),       &
+&                     rhoA_A(:,:), rhoB_B(:,:), rhoB_C(:,:), rhoC_C(:,:),                &
+&                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),     &
+&                     ra(:), za(:), exner(:), rho(:),                      & 
 &                     rpsi_bc(:,:), rchi_bc(:,:), wtheta_B(:,:), f_basic(:,:), &
-&                     f_anomaly(:,:), b_basic_B(:,:), b_anomaly_B(:,:),        &
+&                     f_anomaly(:,:), b_basic_B(:,:), b_anomaly_B(:,:),      &
 &                     bndconv(:,:)
 
-real(4)            :: testing_dt, Lr(2), Lz(2), Lat(2), dr, dz, eta_avg_b, eta_avg_nob,  &
+real(4)            :: testing_dt, Lr, Lz, dr, dz, eta_avg_b, eta_avg_nob,  &
                       time_beg, time_end
 
 integer :: saved_strategy_rpsi, max_iter_rpsi, &
@@ -51,8 +49,8 @@ integer :: saved_strategy_rpsi, max_iter_rpsi, &
 real(4) :: saved_strategy_rpsi_r, saved_strategy_rchi_r, strategy_r, alpha,  &
 &          alpha_rpsi, alpha_rchi
 
-integer :: i,j, m, n, err, mode(size(word))
-real(4) :: r, z, tmp1, tmp2, tmp3, planet_radius,&
+integer :: i,j, m, n, err, mode(4)
+real(4) :: r, z, tmp1, tmp2, tmp3, &
 &          sum_Q, &
 &          sum_Qeta_0_0  , sum_Qeta_dB_0  , sum_Qeta_B0_0  , sum_Qeta_B0dB_0 , &
 &          sum_Qeta_0_dB , sum_Qeta_dB_dB , sum_Qeta_B0_dB , sum_Qeta_B0dB_dB, &
@@ -63,72 +61,57 @@ real(4) :: r, z, tmp1, tmp2, tmp3, planet_radius,&
 
 logical :: file_exists, use_rchi_bc, use_rpsi_bc, debug_mode
 
+
+
 inquire(file="./debug_mode", exist=debug_mode);
 
 call cpu_time(time_beg)
-
-! Read setting
 call read_input(stdin, mode_str)
-do i=1, size(word)
-    if(split_line(mode_str, word(i), "-") /= 0 .and. i /= size(word)) then
-        call error_msg("INIT", 1, "Mode number is not correct")
-        stop
+i = 1; n = 1
+do n=1, size(mode)
+    j = INDEX(mode_str(i:), "-")
+    if (j == 0) then
+        word(n) = mode_str(i:)
+        exit
     end if
+    word(n) = mode_str(i:i+j-2)
+    i = i + j
 end do
 
 mode = 0
-if(word(1) == 'CLYINDRICAL') then
+if(word(1) == 'TENDENCY') then
     mode(1) = 0
-else if(word(2) == 'SPHERICAL') then
+else if(word(1) == 'INSTANT') then
     mode(1) = 1
 else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(1)) // "]")
+    print *, "Unknown Mode : [", trim(word(1)), "]", word(1)=='TENDENCY'
     stop
 end if
 
-if(word(2) == 'TENDENCY') then
+if(word(2) == 'DENSITY_NORMAL') then
     mode(2) = 0
-else if(word(2) == 'INSTANT') then
+else if(word(2) == 'DENSITY_BOUSSINESQ') then
     mode(2) = 1
 else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(2)) // "]")
-    stop
-end if
-
-if(word(3) == 'DENSITY_NORMAL') then
-    mode(3) = 0
-else if(word(3) == 'DENSITY_BOUSSINESQ') then
-    mode(3) = 1
-else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(3)) // "]")
+    print *, "Unknown Mode :", trim(word(2))
     stop
 end if
 
 ! ABC : [ABC] flag
-if(word(4) == 'ABC_UPDATE') then
-    mode(4) = 1
-else if(word(4) == 'ABC_NOUPDATE') then
-    mode(4) = 0
+if(word(3) == 'ABC_UPDATE') then
+    mode(3) = 1
+else if(word(3) == 'ABC_NOUPDATE') then
+    mode(3) = 0
 else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(4)) // "]" )
+    print *, "Unknown Mode :", trim(word(3))
     stop
 end if
 
 
-! TENDENCY MODE
-if(mode(2) == 0) then
+if(mode(1) == 0) then
     call read_input(stdin, buffer); read(buffer, *) testing_dt
-    call read_input(stdin, buffer); read(buffer, *) Lr(0), Lr(1), Lz(0), Lz(1);
 end if
-
-if(mode(1) == 1) then
-    call read_input(stdin, buffer); read(buffer, *) planet_radius
-    call read_input(stdin, buffer); read(buffer, *) Lat(0), Lat(1), Lz(0), Lz(1);
-    Lr(0) = Lat(0) * MATH_PI / 180.0 * planet_radius
-    Lr(1) = Lat(1) * MATH_PI / 180.0 * planet_radius
-
-end if
-
+call read_input(stdin, buffer); read(buffer, *) Lr, Lz;
 call read_input(stdin, buffer); read(buffer, *) nr, nz;
 call read_input(stdin, input_folder);
 call read_input(stdin, output_folder);
@@ -160,19 +143,11 @@ else
 end if
 
 
-print *, "mode: ", mode(2),",",mode(3),",",mode(4),","
-if(mode(2) == 0) then
+print *, "mode: ", mode(1),",",mode(2),",",mode(3),",",mode(4)
+if(mode(1) == 0) then
     print *, "Testing time: ", testing_dt
 end if
-if(mode(1) == 0) then 
-    print *, "Lr:", Lr(0), Lr(1)
-    print *, "Lz:", Lz(0), Lz(1)
-else if(mode(1) == 1)
-    print *, "Planet Radius: ", planet_radius
-    print *, "Lat:", Lat(0), Lat(1)
-    print *, "Lz:", Lz(0), Lz(1)
-end if
-
+print *, "Lr:", Lr, ", Lz:", Lz
 print *, "nr:", nr, ", nz:", nz
 print *, "Input folder: ", trim(input_folder)
 print *, "Output folder: ", trim(output_folder)
@@ -223,7 +198,6 @@ allocate(wtheta_B(nr-1,nz-1));
 allocate(w_A(nr-1,nz)); allocate(u_C(nr,nz-1));
 allocate(theta(nr-1,nz-1)); allocate(eta(nr-1,nz)); allocate(m2(nr-1,nz-1));
 allocate(ra(nr));       allocate(za(nz));          allocate(rho(nz));
-allocate(ranga(nr));      
 allocate(exner(nz));    allocate(bndconv(nr-1,2));
 
 call read_2Dfield(15, trim(input_folder)//"/"//A_file, rhoA_in, nr, nz)
@@ -251,9 +225,9 @@ do i=1,nr
 end do
 do j=1,nz
     za(j) = (j-1) * dz
-    exner(j) = merge(1.0 - za(j) / h0, 1.0, mode(3) == 0)
+    exner(j) = merge(1.0 - za(j) / h0, 1.0, mode(2) == 0)
     rho(j) = merge(p0 / (theta0 * Rd) * exner(j)**(1.0 / kappa - 1.0), 1.0, &
-&                   mode(3) == 0)
+&                   mode(2) == 0)
 end do
 
 
@@ -398,7 +372,7 @@ call write_2Dfield(11, trim(output_folder)//"/RHS_rpsi_mom-O.bin", RHS_rpsi_mom,
 print *, "Initialization complete."
 
 ! TENDENCY MODE
-if(mode(2) == 0) then
+if(mode(1) == 0) then
     ! ### STAGE I : invert to get rpsi  !
     call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
     rpsi = 0.0

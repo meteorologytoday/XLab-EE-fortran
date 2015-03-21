@@ -36,5 +36,30 @@ end do
 line = trim(buffer)
 
 end subroutine
+
+
+integer function split_line(line, output, delimiter)
+implicit none
+character(*), intent(inout)   :: line, output
+character(*)                  :: delimiter
+
+
+integer :: i
+
+
+i = INDEX(line, delimiter)
+
+if (i == 0) then ! No match and length is not zero
+    output = line
+    line = ''
+    split_line = 1
+else
+    output = line(1:i-1)
+    line = line(i+1:)
+    split_line = 0
+end if
+
+end function
+
 end module
     

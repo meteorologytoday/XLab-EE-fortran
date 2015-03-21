@@ -3,10 +3,10 @@ use elliptic_tools
 use field_tools
 use constants
 use read_input_tools
-use error_tools
+use message_tools
 implicit none
 
-real(4), parameter :: MATH_PI = acos(-1.0)
+real(4), parameter :: MATH_PI = acos(-1.0), RAD2DEG = 180.0 / MATH_PI, DEG2RAD = MATH_PI / 180.0
 integer, parameter :: stdin=5, fd=15
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_folder, &
@@ -38,13 +38,17 @@ real(4), pointer   :: rpsi(:,:), rchi(:,:), f(:,:), Q_in(:,:), coe(:, :, :),   &
 &                     JJ_B(:,:), RHS_rpsi_thm(:,:), RHS_rpsi_mom(:,:),         &
 &                     rhoA_A(:,:), rhoB_B(:,:), rhoB_C(:,:), rhoC_C(:,:),      &
 &                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),       &
-&                     ra(:), ranga(:), za(:), exner(:), rho(:),                &
+&                     ra(:), rcuva(:), za(:), exner(:), rho(:),                &
 &                     rpsi_bc(:,:), rchi_bc(:,:), wtheta_B(:,:), f_basic(:,:), &
 &                     f_anomaly(:,:), b_basic_B(:,:), b_anomaly_B(:,:),        &
 &                     bndconv(:,:)
 
-real(4)            :: testing_dt, Lr(2), Lz(2), Lat(2), dr, dz, eta_avg_b, eta_avg_nob,  &
+real(4)            :: testing_dt, Lr(2), Lz(2), Lat(2), dr, dz, dlat,          &
+                      eta_avg_b, eta_avg_nob,  &
                       time_beg, time_end
+
+real(4)            :: m_ref
+integer            :: m_ref_r, m_ref_z
 
 integer :: saved_strategy_rpsi, max_iter_rpsi, &
 &          saved_strategy_rchi, max_iter_rchi, strategy
@@ -118,15 +122,14 @@ end if
 ! TENDENCY MODE
 if(mode(2) == 0) then
     call read_input(stdin, buffer); read(buffer, *) testing_dt
-    call read_input(stdin, buffer); read(buffer, *) Lr(0), Lr(1), Lz(0), Lz(1);
+    call read_input(stdin, buffer); read(buffer, *) Lr(1), Lr(2), Lz(1), Lz(2);
 end if
 
 if(mode(1) == 1) then
     call read_input(stdin, buffer); read(buffer, *) planet_radius
-    call read_input(stdin, buffer); read(buffer, *) Lat(0), Lat(1), Lz(0), Lz(1);
-    Lr(0) = Lat(0) * MATH_PI / 180.0 * planet_radius
-    Lr(1) = Lat(1) * MATH_PI / 180.0 * planet_radius
-
+    Lat(1) = -90.0; Lat(2) = 90.0;
+    Lr(1) = Lat(1) * DEG2RAD * planet_radius
+    Lr(2) = Lat(2) * DEG2RAD * planet_radius
 end if
 
 call read_input(stdin, buffer); read(buffer, *) nr, nz;
@@ -165,12 +168,13 @@ if(mode(2) == 0) then
     print *, "Testing time: ", testing_dt
 end if
 if(mode(1) == 0) then 
-    print *, "Lr:", Lr(0), Lr(1)
-    print *, "Lz:", Lz(0), Lz(1)
+    print *, "Lr:", Lr(1), Lr(2)
+    print *, "Lz:", Lz(1), Lz(2)
 else if(mode(1) == 1)
+    print *, "Using spherical mode, domain is forced to be global."
     print *, "Planet Radius: ", planet_radius
-    print *, "Lat:", Lat(0), Lat(1)
-    print *, "Lz:", Lz(0), Lz(1)
+    print *, "Lat:", Lat(1), Lat(2)
+    print *, "Lz:", Lz(1), Lz(2)
 end if
 
 print *, "nr:", nr, ", nz:", nz
@@ -223,7 +227,7 @@ allocate(wtheta_B(nr-1,nz-1));
 allocate(w_A(nr-1,nz)); allocate(u_C(nr,nz-1));
 allocate(theta(nr-1,nz-1)); allocate(eta(nr-1,nz)); allocate(m2(nr-1,nz-1));
 allocate(ra(nr));       allocate(za(nz));          allocate(rho(nz));
-allocate(ranga(nr));      
+allocate(rcuva(nr));      
 allocate(exner(nz));    allocate(bndconv(nr-1,2));
 
 call read_2Dfield(15, trim(input_folder)//"/"//A_file, rhoA_in, nr, nz)
@@ -244,23 +248,34 @@ if(use_rchi_bc .eqv. .true.) then
 end if
 
 
-! ### Calculate dr, dz, ra, za, exner, rho (pseudo-density)
-dr = Lr / (nr-1); dz = Lz / (nz-1);
+! ### Calculate dr, dz, dlat, ra, rcuva, za, exner, rho (pseudo-density)
+dr = (Lr(2) - Lr(1)) / (nr-1); dz = (Lz(2) - Lz(1)) / (nz-1);
+
 do i=1,nr
-    ra(i) = (i-1) * dr
+    ra(i) = Lr(1) + (i-1) * dr
 end do
+
+! Notice the mode(3) specifies rho to be constant or not
 do j=1,nz
-    za(j) = (j-1) * dz
+    za(j) = Lz(1) + (j-1) * dz
     exner(j) = merge(1.0 - za(j) / h0, 1.0, mode(3) == 0)
     rho(j) = merge(p0 / (theta0 * Rd) * exner(j)**(1.0 / kappa - 1.0), 1.0, &
 &                   mode(3) == 0)
 end do
 
 
+if(mode(1) == 0) then
+    rcuva = ra 
+else if(mode(1) == 1) then
+    dlat = (Lat(2) - Lat(1)) / (nr-1)
+    do i=1, nr
+        rcuva(i) = planet_radius * cos(Lat(1) + (i-1) * dlat)
+    end do
+end if
+
+
 ! ### sum Q ### !
 sum_Q = cal_sum_Q(Q_in);
-
-
 
 ! ### Normalize coefficient solverA_A = a / (rho * r), solverB_B = b / (rho * r)
 !                         , solverC_C = c / (rho * r)
@@ -268,7 +283,7 @@ sum_Q = cal_sum_Q(Q_in);
 do i=1,nr-1
     do j=1,nz-2
         solverA_A(i,j) = (rhoA_in(i,j+1) + rhoA_in(i+1,j+1))         &
-            &           / (ra(i) + ra(i+1)) / rho(j+1)
+            &           / (rcuva(i) + rcuva(i+1)) / rho(j+1)
     end do
 end do
 
@@ -277,7 +292,7 @@ do i=1,nr-1
     do j=1,nz-1
         solverB_B(i,j) = ( rhoB_in(i  ,j  ) + rhoB_in(i+1,j  )       &
             &             + rhoB_in(i  ,j+1) + rhoB_in(i+1,j+1) )     &
-            &             /(ra(i)+ra(i+1))/(rho(j)+rho(j+1))
+            &             /(rcuva(i)+rcuva(i+1))/(rho(j)+rho(j+1))
     end do
 end do
 
@@ -286,9 +301,10 @@ solver_b_basic_B = solverB_B
 do i=1,nr-2
     do j=1,nz-1
         solverC_C(i,j) = (rhoC_in(i+1,j) + rhoC_in(i+1,j+1))         &
-            &           / ra(i+1) / (rho(j)+rho(j+1))  
+            &           / rcuva(i+1) / (rho(j)+rho(j+1))  
     end do
 end do
+
 
 if(hasNan2(solverA_A)) then
     print *, "SOLVER a has NAN"
@@ -331,18 +347,20 @@ do i=1,nr
     end do
 end do
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! ### Derive angular momentum square from C term (rhoC_C)
 ! The integration order matters! Please be aware of it.
+m2(1,1) = 0
+
+do j = 0
+
 do i=1, nr-1
     do j=1, nz-1
-        if(i==1) then
-            m2(i,j) = 0
-        else
-            m2(i,j) = m2(i-1,j) + (ra(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
-        end if
+            m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
     end do
 end do
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 ! ### Assign JJ_in JJ_B
 do i=1,nr-1
@@ -373,19 +391,20 @@ RHS_rpsi_thm = RHS_rpsi_thm * g0 / theta0
 call write_2Dfield(11, trim(output_folder)//"/RHS_rpsi_thm-O.bin", RHS_rpsi_thm, nr, nz)
 
 
-! ### Assign 2nt part of RHS = - 2 * r^(-2) * d(mf)/dz
+! ### Assign 2nt part of RHS = - 2 * rcuv^(-2) * d(mf)/dz
 RHS_rpsi_mom = 0.0
 do i=1,nr-1
     do j=1,nz-1
          wksp_B(i,j) = sqrt(m2(i,j)) * F_in(i,j)
     end do
 end do
+
 call d_dz_B2A(wksp_B, wksp_A)
 ! wksp_A to f
 do i=2,nr-1
     do j=2,nz-1
          ! Notice that 2.0 factor of averge wksp_A cancelled by another in 2*m*F
-         RHS_rpsi_mom(i,j) = - (wksp_A(i,j) + wksp_A(i-1,j))/(ra(i)**2.0)
+         RHS_rpsi_mom(i,j) = - (wksp_A(i,j) + wksp_A(i-1,j))/(rcuva(i)**2.0)
     end do
 end do
 
@@ -465,7 +484,7 @@ if(mode(2) == 0) then
     do i=1,nr-1
         do j=1,nz-1
             solver_b_anomaly_B(i,j) = b_anomaly_B(i,j)          &
-            &  / ((ra(i)+ra(i+1))/2.0)/((rho(j)+rho(j+1))/2.0)
+            &  / ((rcuva(i)+rcuva(i+1))/2.0)/((rho(j)+rho(j+1))/2.0)
         end do
     end do
 
@@ -1103,19 +1122,17 @@ end do
 end subroutine
 
 
-subroutine d_rdr_O2A(from_dat, to_dat)
+subroutine d_rcurvdr_O2A(from_dat, to_dat)
 ! notice that all the points with r=0 become inifinite
 implicit none
 real(4) :: from_dat(nr,nz), to_dat(nr-1,nz)
-real(4) :: r
 integer :: i,j
 
 call d_dr_O2A(from_dat, to_dat)
 
 do i = 1, nr-1
     do j = 1, nz
-        r = (ra(i)+ra(i+1))/2.0
-        to_dat(i,j) = to_dat(i,j) / r
+        to_dat(i,j) = to_dat(i,j) / ((rcuva(i) + rcuva(i+1)) / 2.0)
     end do
 end do
 

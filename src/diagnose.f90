@@ -6,8 +6,10 @@ use read_input_tools
 use message_tools
 implicit none
 
+
+
 real(4), parameter :: MATH_PI = acos(-1.0), RAD2DEG = 180.0 / MATH_PI, DEG2RAD = MATH_PI / 180.0
-integer, parameter :: stdin=5, fd=15
+integer, parameter :: stdin=5, fd=15, CYLINDRICAL_MODE=0, SPHERICAL_MODE=1
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_folder, &
 &                 output_file, yes_or_no, rchi_bc_file, rpsi_bc_file, mode_str,          &
@@ -80,11 +82,11 @@ do i=1, size(word)
     end if
 end do
 
-mode = 0
-if(word(1) == 'CLYINDRICAL') then
-    mode(1) = 0
+mode(:) = 0
+if(word(1) == 'CYLINDRICAL') then
+    mode(1) = CYLINDRICAL_MODE
 else if(word(2) == 'SPHERICAL') then
-    mode(1) = 1
+    mode(1) = SPHERICAL_MODE
 else
     call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(1)) // "]")
     stop
@@ -122,11 +124,12 @@ end if
 ! TENDENCY MODE
 if(mode(2) == 0) then
     call read_input(stdin, buffer); read(buffer, *) testing_dt
-    call read_input(stdin, buffer); read(buffer, *) Lr(1), Lr(2), Lz(1), Lz(2);
 end if
 
-if(mode(1) == 1) then
-    call read_input(stdin, buffer); read(buffer, *) planet_radius
+if(mode(1) == CYLINDRICAL_MODE) then
+    call read_input(stdin, buffer); read(buffer, *) Lr(1), Lr(2), Lz(1), Lz(2);
+else if(mode(1) == SPHERICAL_MODE) then
+    call read_input(stdin, buffer); read(buffer, *) planet_radius, Lz(1), Lz(2);
     Lat(1) = -90.0; Lat(2) = 90.0;
     Lr(1) = Lat(1) * DEG2RAD * planet_radius
     Lr(2) = Lat(2) * DEG2RAD * planet_radius
@@ -163,14 +166,14 @@ else
 end if
 
 
-print *, "mode: ", mode(2),",",mode(3),",",mode(4),","
+print *, "mode: ", mode(1), ",", mode(2),",",mode(3),",",mode(4)
 if(mode(2) == 0) then
     print *, "Testing time: ", testing_dt
 end if
-if(mode(1) == 0) then 
+if(mode(1) == CYLINDRICAL_MODE) then 
     print *, "Lr:", Lr(1), Lr(2)
     print *, "Lz:", Lz(1), Lz(2)
-else if(mode(1) == 1)
+else if(mode(1) == SPHERICAL_MODE) then
     print *, "Using spherical mode, domain is forced to be global."
     print *, "Planet Radius: ", planet_radius
     print *, "Lat:", Lat(1), Lat(2)
@@ -197,7 +200,7 @@ else
 end if
 
 if(use_rchi_bc .eqv. .true.) then
-    print *, "Use CHI boundary condition: Yes (", trim(rchi_bc_file), ")"
+    print *, "Use rchi boundary condition: Yes (", trim(rchi_bc_file), ")"
 else
     print *, "Use rpsi boundary condition: No "
 end if
@@ -347,20 +350,24 @@ do i=1,nr
     end do
 end do
 
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! ### Derive angular momentum square from C term (rhoC_C)
 ! The integration order matters! Please be aware of it.
-m2(1,1) = 0
 
-do j = 0
-
-do i=1, nr-1
-    do j=1, nz-1
+if(mode(2) == CYLINDRICAL_MODE) then
+    m2(1,:) = 0
+    do i = 2, nr-1
+        do j = 1, nz-1
             m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
+        end do
     end do
-end do
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+else if(mode(2) == SPHERICAL_MODE) then
+    m2(1,:) = 0
+    do i=1, nr-1
+        do j=1, nz-1
+            m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
+        end do
+    end do
+end if
 
 ! ### Assign JJ_in JJ_B
 do i=1,nr-1
@@ -1030,7 +1037,7 @@ real(4) :: from_rpsi(nr,nz), to_w(nr-1,nz), to_u(nr,nz-1)
 real(4) :: r
 integer :: i,j
 
-call d_rdr_O2A(from_rpsi, to_w)
+call d_rcuvdr_O2A(from_rpsi, to_w)
 call d_dz_O2C(from_rpsi, to_u); to_u = -to_u
 ! notice gradient of rpsi gets momentum flux, so we need to divide it by rho.
 do i=1,nr-1
@@ -1043,7 +1050,7 @@ do i=1,nr
     do j=1,nz-1
         r = ra(i)
         if(r /= 0) then 
-            to_u(i,j) = to_u(i,j)/(r*(rho(j)+rho(j+1))/2.0)
+            to_u(i,j) = to_u(i,j)/(rcuva(i)*(rho(j)+rho(j+1))/2.0)
         else
             to_u(i,j) = 0.0
         end if
@@ -1122,7 +1129,7 @@ end do
 end subroutine
 
 
-subroutine d_rcurvdr_O2A(from_dat, to_dat)
+subroutine d_rcuvdr_O2A(from_dat, to_dat)
 ! notice that all the points with r=0 become inifinite
 implicit none
 real(4) :: from_dat(nr,nz), to_dat(nr-1,nz)
@@ -1138,41 +1145,66 @@ end do
 
 end subroutine
 
+real(4) function integrate_weight_B(weight)
+implicit none
+real(4) :: weight(nr-1, nz-1)
+real(4) :: r, rcuv, dr, dz, rho_
+integer :: i,j
+
+integrate_weight_B = 0.0;
+do i = 1,nr-1
+    do j = 1, nz-1
+        r = (ra(i)+ra(i+1))/2.0
+        rcuv = (rcuva(i)+rcuva(i+1))/2.0
+        dr = ra(i+1) - ra(i)
+        dz = za(j+1) - za(j)
+        rho_ = (rho(j+1) + rho(j))/2.0
+
+        integrate_weight_B = integrate_weight_B + weight(i,j) * rho_ * rcuv * dr * dz
+    end do
+end do
+
+end function
+
 real(4) function cal_sum_Q(Q)
 implicit none
 real(4) :: Q(nr-1, nz-1)
-real(4) :: r, dr, dz, rho_
+real(4) :: r, rcuv, dr, dz, rho_
 integer :: i,j
 
 cal_sum_Q = 0.0;
 do i = 1,nr-1
     do j = 1, nz-1
         r = (ra(i)+ra(i+1))/2.0
+        rcuv = (rcuva(i)+rcuva(i+1))/2.0
         dr = ra(i+1) - ra(i)
         dz = za(j+1) - za(j)
         rho_ = (rho(j+1) + rho(j))/2.0
 
-        cal_sum_Q = cal_sum_Q + Q(i,j) * rho_ * r * dr * dz
+        cal_sum_Q = cal_sum_Q + Q(i,j) * rho_ * rcuv * dr * dz
     end do
 end do
+
+cal_sum_Q = integrate_weight_B(Q)
 
 end function
 
 real(4) function cal_sum_Qeta(Q, eta)
 implicit none
 real(4) :: Q(nr-1, nz-1), eta(nr-1, nz)
-real(4) :: r, dr, dz, rho_
+real(4) :: r, rcuv, dr, dz, rho_
 integer :: i,j
 
 cal_sum_Qeta = 0.0
 do i = 1,nr-1
     do j = 1, nz-1
         r = (ra(i)+ra(i+1))/2.0
+        rcuv = (rcuva(i)+rcuva(i+1))/2.0
         dr = ra(i+1) - ra(i)
         dz = za(j+1) - za(j)
         rho_ = (rho(j+1) + rho(j))/2.0
 
-        cal_sum_Qeta = cal_sum_Qeta + ((eta(i,j) + eta(i,j+1)) /2.0) * Q(i,j) * rho_ * r * dr * dz
+        cal_sum_Qeta = cal_sum_Qeta + ((eta(i,j) + eta(i,j+1)) /2.0) * Q(i,j) * rho_ * rcuv * dr * dz
     end do
 end do
 
@@ -1181,18 +1213,19 @@ end function
 real(4) function cal_sum_wtheta(wtheta_B)
 implicit none
 real(4) :: wtheta_B(nr-1, nz-1)
-real(4) :: r, dr, dz, rho_
+real(4) :: r, rcuv, dr, dz, rho_
 integer :: i,j
 
 cal_sum_wtheta = 0.0
 do i = 1,nr-1
     do j = 1, nz-1
         r = (ra(i)+ra(i+1))/2.0
+        rcuv = (rcuva(i)+rcuva(i+1))/2.0
         dr = ra(i+1) - ra(i)
         dz = za(j+1) - za(j)
         rho_ = (rho(j+1) + rho(j))/2.0
 
-        cal_sum_wtheta = cal_sum_wtheta + wtheta_B(i,j) * rho_ * r * dr * dz
+        cal_sum_wtheta = cal_sum_wtheta + wtheta_B(i,j) * rho_ * rcuv * dr * dz
     end do
 end do
 
@@ -1217,7 +1250,7 @@ implicit none
 real(4) :: rchi(nr,nz), eta(nr-1,nz)
 integer :: i,j
 
-call d_rdr_O2A(rchi, eta)
+call d_rcuvdr_O2A(rchi, eta)
 
 do i=1,nr-1
     do j=1,nz

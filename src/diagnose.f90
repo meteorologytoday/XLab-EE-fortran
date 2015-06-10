@@ -32,7 +32,7 @@ character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_f
 
 
 real(4), pointer   :: rpsi(:,:), rchi(:,:), f(:,:), Q_in(:,:), coe(:, :, :),   &
-&                     F_in(:,:),                                               &
+&                     F_in(:,:), sin_table(:),                                 &
 &                     rhoA_in(:,:), rhoB_in(:,:), rhoC_in(:,:),                &
 &                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),      &
 &                     solverA_A(:,:), solverB_B(:,:), solverC_C(:,:),          &
@@ -59,7 +59,7 @@ real(4) :: saved_strategy_rpsi_r, saved_strategy_rchi_r, strategy_r, alpha,  &
 
 integer :: i,j, m, n, err, mode(size(word))
 real(4) :: r, z, tmp1, tmp2, tmp3, planet_radius,&
-&          sum_Q, &
+&          sum_Q, sum_dtheta_dt, &
 &          sum_Qeta_0_0  , sum_Qeta_dB_0  , sum_Qeta_B0_0  , sum_Qeta_B0dB_0 , &
 &          sum_Qeta_0_dB , sum_Qeta_dB_dB , sum_Qeta_B0_dB , sum_Qeta_B0dB_dB, &
 &          sum_Qeta_0_B0 , sum_Qeta_dB_B0 , sum_Qeta_B0_B0 , sum_Qeta_B0dB_B0, &
@@ -80,12 +80,13 @@ do i=1, size(word)
         call error_msg("INIT", 1, "Mode number is not correct")
         stop
     end if
+    print *, "READ:::", word(i)
 end do
 
 mode(:) = 0
 if(word(1) == 'CYLINDRICAL') then
     mode(1) = CYLINDRICAL_MODE
-else if(word(2) == 'SPHERICAL') then
+else if(word(1) == 'SPHERICAL') then
     mode(1) = SPHERICAL_MODE
 else
     call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(1)) // "]")
@@ -109,11 +110,11 @@ else
     call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(3)) // "]")
     stop
 end if
-
-! ABC : [ABC] flag
-if(word(4) == 'ABC_UPDATE') then
+if(word(4) == 'BARO_ALL') then
+    mode(4) = 2
+else if(word(4) == 'BAROCLINIC') then
     mode(4) = 1
-else if(word(4) == 'ABC_NOUPDATE') then
+else if(word(4) == 'BAROTROPIC') then
     mode(4) = 0
 else
     call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(4)) // "]" )
@@ -222,6 +223,7 @@ allocate(rhoA_in(nr, nz));  allocate(rhoB_in(nr, nz));   allocate(rhoC_in(nr, nz
 allocate(rhoA_A(nr-1, nz)); allocate(rhoB_C(nr, nz-1));  allocate(rhoB_B(nr-1,nz-1));
 allocate(rhoC_C(nr, nz-1)); 
 allocate(b_basic_B(nr-1,nz-1));                    allocate(b_anomaly_B(nr-1,nz-1));
+allocate(sin_table(nr));
 
 allocate(solverA_A(nr-1, nz-2)); allocate(solverB_B(nr-1, nz-1));allocate(solverC_C(nr-2, nz-1));
 allocate(solver_b_basic_B(nr-1, nz-1));
@@ -273,6 +275,7 @@ else if(mode(1) == 1) then
     dlat = (Lat(2) - Lat(1)) / (nr-1)
     do i=1, nr
         rcuva(i) = planet_radius * cos(Lat(1) + (i-1) * dlat)
+        sin_table(i) = sin(Lat(1) + (i-1) * dlat)
     end do
 end if
 
@@ -353,18 +356,25 @@ end do
 ! ### Derive angular momentum square from C term (rhoC_C)
 ! The integration order matters! Please be aware of it.
 
-if(mode(2) == CYLINDRICAL_MODE) then
-    m2(1,:) = 0
-    do i = 2, nr-1
-        do j = 1, nz-1
-            m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
-        end do
-    end do
-else if(mode(2) == SPHERICAL_MODE) then
-    m2(1,:) = 0
+if(mode(1) == CYLINDRICAL_MODE) then
+
+    m2(1,:) = (((rcuva(2) - rcuva(1)) / 4.0)**3.0) * rhoC_C(i,j) * (ra(2) - ra(1)) / 2.0
+    
     do i=1, nr-1
         do j=1, nz-1
             m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
+        end do
+    end do
+
+else if(mode(1) == SPHERICAL_MODE) then
+
+    m2(1,:) = (((rcuva(2) - rcuva(1)) / 4.0)**3.0) * rhoC_C(i,j) * (ra(2) - ra(1)) / 2.0 &
+        &     / ((sin_table(2) + 3.0 * sin_table(1)) / 4.0)
+
+    do i = 2, nr-1
+        do j = 1, nz-1
+            m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0 &
+                &    / sin_table(i)
         end do
     end do
 end if
@@ -395,6 +405,7 @@ end do
 !print *, "djdr max: " , maxval(abs(djdr))
 RHS_rpsi_thm = RHS_rpsi_thm * g0 / theta0
 !print *, "djdr max: " , maxval(abs(djdr))
+
 call write_2Dfield(11, trim(output_folder)//"/RHS_rpsi_thm-O.bin", RHS_rpsi_thm, nr, nz)
 
 
@@ -406,13 +417,22 @@ do i=1,nr-1
     end do
 end do
 
+!if(hasNan2(wksp_B)) then
+!    print *, "wksp_B has NAN"
+!end if
 call d_dz_B2A(wksp_B, wksp_A)
+!if(hasNan2(wksp_B)) then
+!    print *, "wksp_A has NAN"
+!end if
+
 ! wksp_A to f
 do i=2,nr-1
     do j=2,nz-1
          ! Notice that 2.0 factor of averge wksp_A cancelled by another in 2*m*F
          RHS_rpsi_mom(i,j) = - (wksp_A(i,j) + wksp_A(i-1,j))/(rcuva(i)**2.0)
+        
     end do
+!    print *, "rcuva(",i,") = ", rcuva(i)
 end do
 
     
@@ -464,6 +484,8 @@ if(mode(2) == 0) then
     call write_2Dfield(11, trim(output_folder)//"/u_before-C.bin",u_C,nr,nz-1)
     call write_2Dfield(11, trim(output_folder)//"/dtheta_dt-B.bin", theta,nr-1,nz-1)
     
+    sum_dtheta_dt = integrate_weight_B(theta);
+     
     theta = theta * testing_dt
     ! Calculate forced B field, A and C assumed to be unperturbed for now
     ! dtheta/dr for f
@@ -525,214 +547,130 @@ call write_2Dfield(11, trim(output_folder)//"/RHS_rchi-O.bin", f, nr, nz)
 
 if(use_rchi_bc .eqv. .true.) then
     rchi = rchi_bc
-    print *, "Solving CHI with L(A,B=0,C) = 0 with boundary condition"
-    solverB_B = 0.0; f = 0;
-    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
 
-    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-    alpha = alpha_rchi;
-    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-        & merge(1,0,debug_mode .eqv. .true.))
-    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+    if(mode(4) == 0 .or. mode(4) == 2) then
+        print *, "Solving CHI with L(A,B=0,C) = 0 with boundary condition"
+        solverB_B = 0.0; f = 0;
+        call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
 
-    call cal_eta(rchi, eta)
-    sum_Qeta_0_0 = cal_sum_Qeta(Q_in, eta)
+        strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+        alpha = alpha_rchi;
+        call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+            & merge(1,0,debug_mode .eqv. .true.))
+        print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-    call write_2Dfield(11,trim(output_folder)//"/eta-[0_0]-A.bin",eta,nr-1,nz)
-    call write_2Dfield(11,trim(output_folder)//"/rchi-[0_0]-O.bin",rchi,nr,nz)
+        call cal_eta(rchi, eta)
+        sum_Qeta_0_0 = cal_sum_Qeta(Q_in, eta)
 
-    print *, "Solving CHI with L(A,B=dB,C) = 0 with boundary condition"
-    solverB_B = solver_b_anomaly_B; f = 0;
-    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+        call write_2Dfield(11,trim(output_folder)//"/eta-[0_0]-A.bin",eta,nr-1,nz)
+        call write_2Dfield(11,trim(output_folder)//"/rchi-[0_0]-O.bin",rchi,nr,nz)
 
-    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-    alpha = alpha_rchi;
-    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-        & merge(1,0,debug_mode .eqv. .true.))
-    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+    end if
 
-    call cal_eta(rchi, eta)
-    sum_Qeta_dB_0 = cal_sum_Qeta(Q_in, eta)
+    if(mode(4) == 1 .or. mode(4) == 2) then
+        print *, "Solving CHI with L(A,B=B0+dB,C) = 0 with boundary condition"
+        solverB_B = solver_b_basic_B + solver_b_anomaly_B; f = 0;
+        call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
 
-    call write_2Dfield(11,trim(output_folder)//"/eta-[dB_0]-A.bin",eta,nr-1,nz)
-    call write_2Dfield(11,trim(output_folder)//"/rchi-[dB_0]-O.bin",rchi,nr,nz)
+        strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+        alpha = alpha_rchi;
+        call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+            & merge(1,0,debug_mode .eqv. .true.))
+        print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-    print *, "Solving CHI with L(A,B=B0,C) = 0 with boundary condition"
-    solverB_B = solver_b_basic_B; f = 0;
-    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+        call cal_eta(rchi, eta)
+        sum_Qeta_B0dB_0 = cal_sum_Qeta(Q_in, eta)
 
-    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-    alpha = alpha_rchi;
-    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-        & merge(1,0,debug_mode .eqv. .true.))
-    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-    call cal_eta(rchi, eta)
-    sum_Qeta_B0_0 = cal_sum_Qeta(Q_in, eta)
-
-    call write_2Dfield(11,trim(output_folder)//"/eta-[B0_0]-A.bin",eta,nr-1,nz)
-    call write_2Dfield(11,trim(output_folder)//"/rchi-[B0_0]-O.bin",rchi,nr,nz)
-
-    print *, "Solving CHI with L(A,B=B0+dB,C) = 0 with boundary condition"
-    solverB_B = solver_b_basic_B + solver_b_anomaly_B; f = 0;
-    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-    alpha = alpha_rchi;
-    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-        & merge(1,0,debug_mode .eqv. .true.))
-    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-    call cal_eta(rchi, eta)
-    sum_Qeta_B0dB_0 = cal_sum_Qeta(Q_in, eta)
-
-    call write_2Dfield(11,trim(output_folder)//"/eta-[B0dB_0]-A.bin",eta,nr-1,nz)
-    call write_2Dfield(11,trim(output_folder)//"/rchi-[B0dB_0]-O.bin",rchi,nr,nz)
-
+        call write_2Dfield(11,trim(output_folder)//"/eta-[B0dB_0]-A.bin",eta,nr-1,nz)
+        call write_2Dfield(11,trim(output_folder)//"/rchi-[B0dB_0]-O.bin",rchi,nr,nz)
+    end if
 
 end if
 
 rchi = 0.0
-!==================================================================================
-print *, "Solving CHI with L(A,B=0,C) = -dB"
-solverB_B = 0.0; f = f_anomaly;
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta)
-sum_Qeta_0_dB = cal_sum_Qeta(Q_in, eta)
-
-call write_2Dfield(11,trim(output_folder)//"/eta-[0_dB]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[0_dB]-O.bin",rchi,nr,nz)
-
-!==================================================================================
-print *, "Solving CHI with L(A,B=B0,C) = -dB"
-solverB_B = solver_b_basic_B; f = f_anomaly;
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta)
-sum_Qeta_B0_dB = cal_sum_Qeta(Q_in, eta)
-
-call write_2Dfield(11,trim(output_folder)//"/eta-[B0_dB]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[B0_dB]-O.bin",rchi,nr,nz)
-
-!==================================================================================
-print *, "Solving CHI with L(A,B=dB,C) = -dB"
-solverB_B = solver_b_anomaly_B; f = f_anomaly;
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta)
-sum_Qeta_dB_dB = cal_sum_Qeta(Q_in, eta)
-
-call write_2Dfield(11,trim(output_folder)//"/eta-[dB_dB]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[dB_dB]-O.bin",rchi,nr,nz)
-
-rchi = 0.0;
-!
-!==================================================================================
-print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"
-solverB_B = solver_b_basic_B + solver_b_anomaly_B; f = f_anomaly;
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta)
-sum_Qeta_B0dB_dB = cal_sum_Qeta(Q_in, eta)
-
-call write_2Dfield(11,trim(output_folder)//"/eta-[B0dB_dB]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[B0dB_dB]-O.bin",rchi,nr,nz)
-
-rchi = 0.0;
-!==================================================================================
-print *, "Solving CHI with L(A,B=0,C) = -B0"
-solverB_B = 0.0; f = f_basic;
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta)
-sum_Qeta_0_B0 = cal_sum_Qeta(Q_in, eta)
-
-call write_2Dfield(11,trim(output_folder)//"/eta-[0_B0]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[0_B0]-O.bin",rchi,nr,nz)
-
-!==================================================================================
-print *, "Solving CHI with L(A,B=B0,C) = -B0"
-solverB_B = solver_b_basic_B; f = f_basic;
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta)
-sum_Qeta_B0_B0 = cal_sum_Qeta(Q_in, eta)
-
-call write_2Dfield(11,trim(output_folder)//"/eta-[B0_B0]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[B0_B0]-O.bin",rchi,nr,nz)
-
-!==================================================================================
-print *, "Solving CHI with L(A,B=dB,C) = -B0"
-solverB_B = solver_b_anomaly_B; f = f_basic
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-
-call cal_eta(rchi, eta)
-sum_Qeta_dB_B0 = cal_sum_Qeta(Q_in, eta)
-
-call write_2Dfield(11,trim(output_folder)//"/eta-[dB_B0]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[dB_B0]-O.bin",rchi,nr,nz)
 
 
 !==================================================================================
-print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
-solverB_B = solver_b_basic_B + solver_b_anomaly_B; f = f_basic
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+if(mode(4) == 0 .or. mode(4) == 2) then
 
-strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r
-alpha = alpha_rchi;
-call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+    print *, "Solving CHI with L(A,B=0,C) = -dB"
+    solverB_B = 0.0; f = f_anomaly;
+    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
 
-call cal_eta(rchi, eta)
-sum_Qeta_B0dB_B0 = cal_sum_Qeta(Q_in, eta)
+    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+    alpha = alpha_rchi;
+    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
 
-call write_2Dfield(11,trim(output_folder)//"/eta-[B0dB_B0]-A.bin",eta,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/rchi-[B0dB_B0]-O.bin",rchi,nr,nz)
+    call cal_eta(rchi, eta)
+    sum_Qeta_0_dB = cal_sum_Qeta(Q_in, eta)
 
+    call write_2Dfield(11,trim(output_folder)//"/eta-[0_dB]-A.bin",eta,nr-1,nz)
+    call write_2Dfield(11,trim(output_folder)//"/rchi-[0_dB]-O.bin",rchi,nr,nz)
+end if
+
+
+!==================================================================================
+if(mode(4) == 1 .or. mode(4) == 2) then
+    print *, "Solving CHI with L(A,B=B0+dB,C) = -dB"
+    solverB_B = solver_b_basic_B + solver_b_anomaly_B; f = f_anomaly;
+    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+
+    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+    alpha = alpha_rchi;
+    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+    call cal_eta(rchi, eta)
+    sum_Qeta_B0dB_dB = cal_sum_Qeta(Q_in, eta)
+
+    call write_2Dfield(11,trim(output_folder)//"/eta-[B0dB_dB]-A.bin",eta,nr-1,nz)
+    call write_2Dfield(11,trim(output_folder)//"/rchi-[B0dB_dB]-O.bin",rchi,nr,nz)
+end if
+
+
+!==================================================================================
+if(mode(4) == 0 .or. mode(4) == 2) then
+
+    print *, "Solving CHI with L(A,B=0,C) = -B0"
+    solverB_B = 0.0; f = f_basic;
+    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+
+    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r;
+    alpha = alpha_rchi;
+    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+    call cal_eta(rchi, eta)
+    sum_Qeta_0_B0 = cal_sum_Qeta(Q_in, eta)
+
+    call write_2Dfield(11,trim(output_folder)//"/eta-[0_B0]-A.bin",eta,nr-1,nz)
+    call write_2Dfield(11,trim(output_folder)//"/rchi-[0_B0]-O.bin",rchi,nr,nz)
+
+end if
+
+
+!==================================================================================
+if(mode(4) == 1 .or. mode(4) == 2) then
+    print *, "Solving CHI with L(A,B=B0+dB,C) = -B0"
+    solverB_B = solver_b_basic_B + solver_b_anomaly_B; f = f_basic
+    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+
+    strategy = saved_strategy_rchi; strategy_r = saved_strategy_rchi_r
+    alpha = alpha_rchi;
+    call solve_elliptic(max_iter_rchi, strategy, strategy_r, alpha, rchi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+    call cal_eta(rchi, eta)
+    sum_Qeta_B0dB_B0 = cal_sum_Qeta(Q_in, eta)
+
+    call write_2Dfield(11,trim(output_folder)//"/eta-[B0dB_B0]-A.bin",eta,nr-1,nz)
+    call write_2Dfield(11,trim(output_folder)//"/rchi-[B0dB_B0]-O.bin",rchi,nr,nz)
+end if
 !==================================================================================
 
 
@@ -746,80 +684,45 @@ if(use_rpsi_bc .eqv. .true.) then
     rpsi = rpsi_bc
 end if
 
-print *, "Solving rpsi... L(A, B=0, C) = dJ/dr + dF/dz"
-f = RHS_rpsi_thm + RHS_rpsi_mom
-solverB_B = 0.0
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
-alpha = alpha_rpsi
-call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-call rpsiToUW(rpsi, u_C, w_A)
-call write_2Dfield(11, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
-call write_2Dfield(11,trim(output_folder)//"/w_after-[0]-A.bin",w_A,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/u_after-[0]-C.bin",u_C,nr,nz-1)
+if(mode(4) == 0 .or. mode(4) == 2) then
+    print *, "Solving rpsi... L(A, B=0, C) = dJ/dr + dF/dz"
+    f = RHS_rpsi_thm + RHS_rpsi_mom
+    solverB_B = 0.0
+    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+    strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
+    alpha = alpha_rpsi
+    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+    call rpsiToUW(rpsi, u_C, w_A)
+    call write_2Dfield(11, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
+    call write_2Dfield(11,trim(output_folder)//"/w_after-[0]-A.bin",w_A,nr-1,nz)
+    call write_2Dfield(11,trim(output_folder)//"/u_after-[0]-C.bin",u_C,nr,nz-1)
 
-call cal_wtheta(w_A, theta, wtheta_B)
-sum_wtheta_0_JF = cal_sum_wtheta(wtheta_B) * (g0/theta0)
-call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[0]-B.bin",wtheta_B,nr-1,nz-1)
+    call cal_wtheta(w_A, theta, wtheta_B)
+    sum_wtheta_0_JF = cal_sum_wtheta(wtheta_B) * (g0/theta0)
+    call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[0]-B.bin",wtheta_B,nr-1,nz-1)
+end if
 
+if(mode(4) == 1 .or. mode(4) == 2) then
+    print *, "Solving rpsi... L(A, B=B0dB, C) = dJ/dr + dF/dz"
+    f = RHS_rpsi_thm + RHS_rpsi_mom
+    solverB_B = solver_b_basic_B + solver_b_anomaly_B
+    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+    strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
+    alpha = alpha_rpsi
+    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+    call rpsiToUW(rpsi, u_C, w_A)
+    call write_2Dfield(11, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
+    call write_2Dfield(11,trim(output_folder)//"/w_after-[B0dB]-A.bin",w_A,nr-1,nz)
+    call write_2Dfield(11,trim(output_folder)//"/u_after-[B0dB]-C.bin",u_C,nr,nz-1)
 
-print *, "Solving rpsi... L(A, B=dB, C) = dJ/dr + dF/dz"
-f = RHS_rpsi_thm + RHS_rpsi_mom
-solverB_B = solver_b_anomaly_B
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
-alpha = alpha_rpsi
-call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-call rpsiToUW(rpsi, u_C, w_A)
-call write_2Dfield(11, trim(output_folder)//"/rpsi_after-[dB]-O.bin", rpsi, nr, nz)
-call write_2Dfield(11,trim(output_folder)//"/w_after-[dB]-A.bin",w_A,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/u_after-[dB]-C.bin",u_C,nr,nz-1)
-
-call cal_wtheta(w_A, theta, wtheta_B)
-sum_wtheta_dB_JF = cal_sum_wtheta(wtheta_B) * (g0/theta0)
-call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[dB]-B.bin",wtheta_B,nr-1,nz-1)
-
-
-print *, "Solving rpsi... L(A, B=B0, C) = dJ/dr + dF/dz"
-f = RHS_rpsi_thm + RHS_rpsi_mom
-solverB_B = solver_b_basic_B
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
-alpha = alpha_rpsi
-call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-call rpsiToUW(rpsi, u_C, w_A)
-call write_2Dfield(11, trim(output_folder)//"/rpsi_after-[B0]-O.bin", rpsi, nr, nz)
-call write_2Dfield(11,trim(output_folder)//"/w_after-[B0]-A.bin",w_A,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/u_after-[B0]-C.bin",u_C,nr,nz-1)
-
-call cal_wtheta(w_A, theta, wtheta_B)
-sum_wtheta_B0_JF = cal_sum_wtheta(wtheta_B) * (g0/theta0)
-call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[B0]-B.bin",wtheta_B,nr-1,nz-1)
-
-print *, "Solving rpsi... L(A, B=B0dB, C) = dJ/dr + dF/dz"
-f = RHS_rpsi_thm + RHS_rpsi_mom
-solverB_B = solver_b_basic_B + solver_b_anomaly_B
-call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
-strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r;
-alpha = alpha_rpsi
-call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
-    & merge(1,0,debug_mode .eqv. .true.))
-print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
-call rpsiToUW(rpsi, u_C, w_A)
-call write_2Dfield(11, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
-call write_2Dfield(11,trim(output_folder)//"/w_after-[B0dB]-A.bin",w_A,nr-1,nz)
-call write_2Dfield(11,trim(output_folder)//"/u_after-[B0dB]-C.bin",u_C,nr,nz-1)
-
-call cal_wtheta(w_A, theta, wtheta_B)
-sum_wtheta_B0dB_JF = cal_sum_wtheta(wtheta_B) * (g0/theta0)
-call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[B0dB]-B.bin",wtheta_B,nr-1,nz-1)
-
+    call cal_wtheta(w_A, theta, wtheta_B)
+    sum_wtheta_B0dB_JF = cal_sum_wtheta(wtheta_B) * (g0/theta0)
+    call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[B0dB]-B.bin",wtheta_B,nr-1,nz-1)
+end if
 
 ! Exchange conversion term check !
 
@@ -827,34 +730,23 @@ call write_2Dfield(11,trim(output_folder)//"/wtheta_JF_after-[B0dB]-B.bin",wthet
 if(use_rchi_bc .eqv. .true.) then
 
     print *, "Exchange conversion term check..."
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_0]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_0)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv-[0].bin", bndconv,nr-1,2)
+    if(mode(4) == 0 .or. mode(4) == 2) then
+        call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[0_0]-O.bin", rchi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[0_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+        call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_0)
+        call write_2Dfield(11,trim(output_folder)//"/bndconv-[0].bin", bndconv,nr-1,2)
+    end if
 
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_0]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_B0)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv-[B0].bin", bndconv,nr-1,2)
-
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[dB]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_0]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_dB)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv-[dB].bin", bndconv,nr-1,2)
-
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_0]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_B0dB)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv-[B0dB].bin", bndconv,nr-1,2)
-
+    if(mode(4) == 1 .or. mode(4) == 2) then
+        call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_0]-O.bin", rchi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_dB]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+        call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv_B0dB)
+        call write_2Dfield(11,trim(output_folder)//"/bndconv-[B0dB].bin", bndconv,nr-1,2)
+    end if
 end if
 
 
@@ -862,30 +754,21 @@ end if
 if(use_rchi_bc .eqv. .true.) then
 
     print *, "Exchange conversion term check..."
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_dB]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_0)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[0].bin", bndconv,nr-1,2)
+    if(mode(4) == 0 .or. mode(4) == 2) then
+        call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[0]-O.bin", rpsi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[0_dB]-O.bin", rchi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+        call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_0)
+        call write_2Dfield(11,trim(output_folder)//"/bndconv2-[0].bin", bndconv,nr-1,2)
+    end if
 
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_dB]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_B0)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[B0].bin", bndconv,nr-1,2)
-
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[dB]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_dB]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_dB)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[dB].bin", bndconv,nr-1,2)
-
-    call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_dB]-O.bin", rchi, nr, nz)
-    call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
-    call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_B0dB)
-    call write_2Dfield(11,trim(output_folder)//"/bndconv2-[B0dB].bin", bndconv,nr-1,2)
-
+    if(mode(4) == 1 .or. mode(4) == 2) then
+        call read_2Dfield(15, trim(output_folder)//"/rpsi_after-[B0dB]-O.bin", rpsi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_dB]-O.bin", rchi, nr, nz)
+        call read_2Dfield(15, trim(output_folder)//"/rchi-[B0dB_B0]-O.bin", wksp_O, nr, nz); rchi = rchi + wksp_O
+        call cal_exchange_conversion(rpsi, rchi, rhoC_in, bndconv, sum_bndconv2_B0dB)
+        call write_2Dfield(11,trim(output_folder)//"/bndconv2-[B0dB].bin", bndconv,nr-1,2)
+    end if
 end if
 
 
@@ -893,73 +776,71 @@ end if
 
 call cpu_time(time_end)
 
-open (unit=15,file=trim(output_folder)//"/efficiency.txt",action="write",status="replace")
-write (15,*) "Time elapsed (sec): ", (time_end - time_beg)
-write (15,*) "sum Q                 : ", sum_Q
+if(mode(4) == 0 .or. mode(4) == 2) then
+    open (unit=15,file=trim(output_folder)//"/efficiency.txt",action="write",status="replace")
+    write (15,*) "Time elapsed (sec)                          : ", (time_end - time_beg)
+    write (15,*) "sum Q                                       : ", sum_Q
+    write (15,*) "sum dtheta_dt                               : ", sum_dtheta_dt
+    write (15,*) "Local heat response (sum Q / sum dtheta_dt) : ", sum_dtheta_dt / sum_Q
 
-write (15,*) "# Boundary efficiency"
-if(use_rchi_bc .eqv. .true.) then
-    write (15,*) "eta [L(B=0)    = 0]      w/  boundary : ", sum_Qeta_0_0, ", ", (sum_Qeta_0_0 / sum_Q)
-    write (15,*) "eta [L(B=dB)   = 0]      w/  boundary : ", sum_Qeta_dB_0, ", ", (sum_Qeta_dB_0 / sum_Q)
-    write (15,*) "eta [L(B=B0)   = 0]      w/  boundary : ", sum_Qeta_B0_0, ", ", (sum_Qeta_B0_0 / sum_Q)
-    write (15,*) "eta [L(B=B0dB) = 0]      w/  boundary : ", sum_Qeta_B0dB_0, ", ", (sum_Qeta_B0dB_0 / sum_Q)
+    write (15,*) "# Boundary efficiency"
+    if(use_rchi_bc .eqv. .true.) then
+        write (15,*) "eta [L(B=0)    = 0]      w/  boundary : ", sum_Qeta_0_0, ", ", (sum_Qeta_0_0 / sum_Q)
+    end if
+
+    write (15,*) "# Internal efficiency"
+    write (15,*) "eta [L(B=0)    = dB]     wo/ boundary : ", sum_Qeta_0_dB, ", ", (sum_Qeta_0_dB / sum_Q)
+    write (15,*) "eta [L(B=0)    = B0]     wo/ boundary : ", sum_Qeta_0_B0, ", ", (sum_Qeta_0_B0 / sum_Q)
+
+    if(use_rchi_bc .eqv. .true.) then
+        write (15,*) "# Boundary conversion (Method 1)"
+        write (15,*) "bndconv [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv_0, ", ", (sum_bndconv_0 / sum_Q)
+
+        write (15,*) "# Boundary conversion (Method 2)"
+        write (15,*) "bndconv2 [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv2_0, ", ", (sum_bndconv2_0 / sum_Q)
+    end if
+
+    write (15,*) "# Decomposition sum"
+
+    tmp1 = sum_Qeta_0_0 + sum_Qeta_0_dB + sum_Qeta_0_B0
+    if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_0; end if
+    write (15,*) "etaQ [L(B=0)    = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
+
+    write (15,*) "# wtheta integral"
+    write (15,*) "wtheta [L(B=0)    = J F] w/  boundary : ", sum_wtheta_0_JF, ", ", (sum_wtheta_0_JF / sum_Q)
 end if
 
-write (15,*) "# Internal efficiency"
-write (15,*) "eta [L(B=0)    = dB]     wo/ boundary : ", sum_Qeta_0_dB, ", ", (sum_Qeta_0_dB / sum_Q)
-write (15,*) "eta [L(B=dB)   = dB]     wo/ boundary : ", sum_Qeta_dB_dB, ", ", (sum_Qeta_dB_dB / sum_Q)
-write (15,*) "eta [L(B=B0)   = dB]     wo/ boundary : ", sum_Qeta_B0_dB, ", ", (sum_Qeta_B0_dB / sum_Q)
-write (15,*) "eta [L(B=B0dB) = dB]     wo/ boundary : ", sum_Qeta_B0dB_dB, ", ", (sum_Qeta_B0dB_dB / sum_Q)
+if(mode(4) == 1 .or. mode(4) == 2) then
+    write (15,*) "# Boundary efficiency"
+    if(use_rchi_bc .eqv. .true.) then
+        write (15,*) "eta [L(B=B0dB) = 0]      w/  boundary : ", sum_Qeta_B0dB_0, ", ", (sum_Qeta_B0dB_0 / sum_Q)
+    end if
 
-write (15,*) "eta [L(B=0)    = B0]     wo/ boundary : ", sum_Qeta_0_B0, ", ", (sum_Qeta_0_B0 / sum_Q)
-write (15,*) "eta [L(B=dB)   = B0]     wo/ boundary : ", sum_Qeta_dB_B0, ", ", (sum_Qeta_dB_B0 / sum_Q)
-write (15,*) "eta [L(B=B0)   = B0]     wo/ boundary : ", sum_Qeta_B0_B0, ", ", (sum_Qeta_B0_B0 / sum_Q)
-write (15,*) "eta [L(B=B0dB) = B0]     wo/ boundary : ", sum_Qeta_B0dB_B0, ", ", (sum_Qeta_B0dB_B0 / sum_Q)
+    write (15,*) "# Internal efficiency"
+    write (15,*) "eta [L(B=B0dB) = dB]     wo/ boundary : ", sum_Qeta_B0dB_dB, ", ", (sum_Qeta_B0dB_dB / sum_Q)
+    write (15,*) "eta [L(B=B0dB) = B0]     wo/ boundary : ", sum_Qeta_B0dB_B0, ", ", (sum_Qeta_B0dB_B0 / sum_Q)
 
-if(use_rchi_bc .eqv. .true.) then
-    write (15,*) "# Boundary conversion (Method 1)"
-    write (15,*) "bndconv [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv_0, ", ", (sum_bndconv_0 / sum_Q)
-    write (15,*) "bndconv [L(B=dB) = B0dB]  w/ boundary : ", sum_bndconv_dB, ", ", (sum_bndconv_dB / sum_Q)
-    write (15,*) "bndconv [L(B=B0) = B0dB]  w/ boundary : ", sum_bndconv_B0, ", ", (sum_bndconv_B0 / sum_Q)
-    write (15,*) "bndconv [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv_B0dB, ", ", (sum_bndconv_B0dB / sum_Q)
+    if(use_rchi_bc .eqv. .true.) then
+        write (15,*) "# Boundary conversion (Method 1)"
+        write (15,*) "bndconv [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv_B0dB, ", ", (sum_bndconv_B0dB / sum_Q)
 
-    write (15,*) "# Boundary conversion (Method 2)"
-    write (15,*) "bndconv2 [L(B=0) = B0dB]   w/ boundary : ", sum_bndconv2_0, ", ", (sum_bndconv2_0 / sum_Q)
-    write (15,*) "bndconv2 [L(B=dB) = B0dB]  w/ boundary : ", sum_bndconv2_dB, ", ", (sum_bndconv2_dB / sum_Q)
-    write (15,*) "bndconv2 [L(B=B0) = B0dB]  w/ boundary : ", sum_bndconv2_B0, ", ", (sum_bndconv2_B0 / sum_Q)
-    write (15,*) "bndconv2 [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv2_B0dB, ", ", (sum_bndconv2_B0dB / sum_Q)
+        write (15,*) "# Boundary conversion (Method 2)"
+        write (15,*) "bndconv2 [L(B=B0dB) = B0dB]w/ boundary : ", sum_bndconv2_B0dB, ", ", (sum_bndconv2_B0dB / sum_Q)
+    end if
 
+    write (15,*) "# Decomposition sum"
+
+    tmp1 = sum_Qeta_B0dB_0 + sum_Qeta_B0dB_dB + sum_Qeta_B0dB_B0
+    if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_B0dB; end if
+    write (15,*) "etaQ [L(B=B0dB) = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
+
+    write (15,*) "# wtheta integral"
+    write (15,*) "wtheta [L(B=B0dB) = J F] w/  boundary : ", sum_wtheta_B0dB_JF, ", ", (sum_wtheta_B0dB_JF / sum_Q)
 end if
-
-write (15,*) "# Decomposition sum"
-
-tmp1 = sum_Qeta_0_0 + sum_Qeta_0_dB + sum_Qeta_0_B0
-if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_0; end if
-write (15,*) "etaQ [L(B=0)    = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
-tmp1 = sum_Qeta_dB_0 + sum_Qeta_dB_dB + sum_Qeta_dB_B0
-if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_dB; end if
-write (15,*) "etaQ [L(B=B0)   = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
-tmp1 = sum_Qeta_B0_0 + sum_Qeta_B0_dB + sum_Qeta_B0_B0
-if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_B0; end if
-write (15,*) "etaQ [L(B=dB)   = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
-tmp1 = sum_Qeta_B0dB_0 + sum_Qeta_B0dB_dB + sum_Qeta_B0dB_B0
-if(use_rchi_bc .eqv. .true.) then; tmp1 = tmp1 + sum_bndconv_B0dB; end if
-write (15,*) "etaQ [L(B=B0dB) = J F] w/  boundary : ", tmp1, ", ", (tmp1 / sum_Q)
-
-
-write (15,*) "# wtheta integral"
-
-write (15,*) "wtheta [L(B=0)    = J F] w/  boundary : ", sum_wtheta_0_JF, ", ", (sum_wtheta_0_JF / sum_Q)
-write (15,*) "wtheta [L(B=B0)   = J F] w/  boundary : ", sum_wtheta_B0_JF, ", ", (sum_wtheta_B0_JF / sum_Q)
-write (15,*) "wtheta [L(B=dB)   = J F] w/  boundary : ", sum_wtheta_dB_JF, ", ", (sum_wtheta_dB_JF / sum_Q)
-write (15,*) "wtheta [L(B=B0dB) = J F] w/  boundary : ", sum_wtheta_B0dB_JF, ", ", (sum_wtheta_B0dB_JF / sum_Q)
 
 close (15)
 
 print *, "Time elapsed (sec): ", (time_end - time_beg)
-
-
-
 
 contains
 
@@ -974,12 +855,12 @@ n1 = size(mtx,1)
 n2 = size(mtx,2)
 hasNan2 = .false. 
 do i=1,n1
-    do j=1,n2
-        if(isnan(mtx(i,j))) then
-            hasNan2 = .true.
-            exit
-        end if
-    end do
+do j=1,n2
+if(isnan(mtx(i,j))) then
+    hasNan2 = .true.
+    exit
+end if
+end do
 end do
 
 end function
@@ -997,14 +878,14 @@ n2 = size(mtx,2)
 n3 = size(mtx,3)
 hasNan3 = .false. 
 do i=1,n1
-    do j=1,n2
-        do k=1,n3
-            if(isnan(mtx(i,j,k))) then
-                hasNan3 = .true.
-                exit
-            end if
-        end do
-    end do
+do j=1,n2
+do k=1,n3
+if(isnan(mtx(i,j,k))) then
+    hasNan3 = .true.
+    exit
+end if
+end do
+end do
 end do
 
 end function

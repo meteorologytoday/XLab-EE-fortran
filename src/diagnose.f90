@@ -7,13 +7,15 @@ use message_tools
 implicit none
 
 
+integer, parameter :: ERROR_INPUT = 1
+
 
 real(4), parameter :: MATH_PI = acos(-1.0), RAD2DEG = 180.0 / MATH_PI, DEG2RAD = MATH_PI / 180.0
 integer, parameter :: stdin=5, fd=15, CYLINDRICAL_MODE=0, SPHERICAL_MODE=1
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_folder, &
 &                 output_file, yes_or_no, rchi_bc_file, rpsi_bc_file, mode_str,          &
-&                 word(4), buffer
+&                 word(4), buffer, format_str
 
 
 
@@ -77,10 +79,11 @@ call cpu_time(time_beg)
 call read_input(stdin, mode_str)
 do i=1, size(word)
     if(split_line(mode_str, word(i), "-") /= 0 .and. i /= size(word)) then
-        call error_msg("INIT", 1, "Mode number is not correct")
+        write (format_str, "(A, I1, A)") "There should be ", size(word), " inputs&
+                                        & separated by dashes."
+        call error_msg("INIT", ERROR_INPUT, format_str)
         stop
     end if
-    print *, "READ:::", word(i)
 end do
 
 mode(:) = 0
@@ -89,7 +92,7 @@ if(word(1) == 'CYLINDRICAL') then
 else if(word(1) == 'SPHERICAL') then
     mode(1) = SPHERICAL_MODE
 else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(1)) // "]")
+    call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(1)) // "]")
     stop
 end if
 
@@ -98,7 +101,7 @@ if(word(2) == 'TENDENCY') then
 else if(word(2) == 'INSTANT') then
     mode(2) = 1
 else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(2)) // "]")
+    call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(2)) // "]")
     stop
 end if
 
@@ -107,7 +110,7 @@ if(word(3) == 'DENSITY_NORMAL') then
 else if(word(3) == 'DENSITY_BOUSSINESQ') then
     mode(3) = 1
 else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(3)) // "]")
+    call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(3)) // "]")
     stop
 end if
 if(word(4) == 'BARO_ALL') then
@@ -117,7 +120,7 @@ else if(word(4) == 'BAROCLINIC') then
 else if(word(4) == 'BAROTROPIC') then
     mode(4) = 0
 else
-    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(4)) // "]" )
+    call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(4)) // "]" )
     stop
 end if
 
@@ -127,13 +130,29 @@ if(mode(2) == 0) then
     call read_input(stdin, buffer); read(buffer, *) testing_dt
 end if
 
+! Domain size. In spherical mode, domain is by default from south pole
+! to north pole
 if(mode(1) == CYLINDRICAL_MODE) then
     call read_input(stdin, buffer); read(buffer, *) Lr(1), Lr(2), Lz(1), Lz(2);
+
+    if(Lr(2) .le. Lr(1)) then
+        call error_msg("INIT", ERROR_INPUT, "Domain size in radial direction must be positive.")
+    end if
+
+    if(Lz(2) .le. Lz(1)) then
+        call error_msg("INIT", ERROR_INPUT, "Domain size in z direction must be positive.")
+    end if
+
 else if(mode(1) == SPHERICAL_MODE) then
     call read_input(stdin, buffer); read(buffer, *) planet_radius, Lz(1), Lz(2);
     Lat(1) = -90.0; Lat(2) = 90.0;
     Lr(1) = Lat(1) * DEG2RAD * planet_radius
     Lr(2) = Lat(2) * DEG2RAD * planet_radius
+
+    if(Lz(2) .le. Lz(1)) then
+        call error_msg("INIT", ERROR_INPUT, "Domain size in z direction must be positive.")
+    end if
+
 end if
 
 call read_input(stdin, buffer); read(buffer, *) nr, nz;
@@ -310,19 +329,6 @@ do i=1,nr-2
             &           / rcuva(i+1) / (rho(j)+rho(j+1))  
     end do
 end do
-
-
-if(hasNan2(solverA_A)) then
-    print *, "SOLVER a has NAN"
-end if
-if(hasNan2(solverB_B)) then
-    print *, "SOLVER b has NAN"
-end if
-if(hasNan2(solverC_C)) then
-    print *, "SOLVER c has NAN"
-end if
-
-
 
 ! ### Calculate rhoA_A, rhoB_C, rhoB_B, rhoC_C
 

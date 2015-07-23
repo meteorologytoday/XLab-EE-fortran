@@ -1,5 +1,6 @@
 module message_tools
 implicit none
+
 contains
 
 subroutine error_msg(err_type, err_code, err_msg)

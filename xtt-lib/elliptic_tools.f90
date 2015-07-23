@@ -116,7 +116,7 @@ subroutine solve_elliptic(max_iter, strategy, strategy_r, alpha, dat, coe, f, &
 !     previous iteration is smaller than [strategy_r].
 !
 !     strategy "3":
-!     Error is the maximaum
+!	  Mixed condition
 !
 !
 ! dat{real(:,:)}

@@ -73,15 +73,6 @@ call read_input(stdin, C_file);
 call read_input(stdin, buffer);
 read(buffer, *) saved_strategy_rchi_r1, saved_strategy_rchi_r2, saved_max_iter_rchi, alpha_rchi;
 
-call read_input(stdin, yes_or_no)
-if(yes_or_no == 'yes') then
-    call read_input(stdin, rchi_bc_file);
-    use_rchi_bc = .true.
-else
-    use_rchi_bc = .false.
-end if
-
-
 print *, "Geometry: ", geometry
 print *, "Density distribution: ", density_mode
 print *, "Operator complexity: ", operator_complexity
@@ -102,10 +93,4 @@ print *, "A file: ", trim(A_file)
 print *, "B file: ", trim(B_file)
 print *, "C file: ", trim(C_file)
 print *, "rchi's absolute, relative residue, iter: ", saved_strategy_rchi_r1, &
-&		saved_strategy_rchi_r1, saved_max_iter_rchi, alpha_rchi
-
-if(use_rchi_bc .eqv. .true.) then
-    print *, "Use rchi boundary condition: Yes (", trim(rchi_bc_file), ")."
-else
-    print *, "Use rchi boundary condition: No."
-end if
+&       saved_strategy_rchi_r1, saved_max_iter_rchi, alpha_rchi

@@ -21,6 +21,7 @@ include "write-output.f90"
 
 contains
 
-include "quick-tools.f90"
+include "quick-tools1.f90"
+include "quick-tools2.f90"
 
 end program main

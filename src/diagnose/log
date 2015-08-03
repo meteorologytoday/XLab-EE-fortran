@@ -1,0 +1,356 @@
+../../xtt-lib/elliptic_tools.f90:94.2:
+
+&        strategy_r1, strategy_r2, alpha, dat, coe, f, &
+  1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:113.1:
+
+ check_abs_err = .true.
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:115.1:
+
+ check_abs_err = .false.
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:116.1:
+
+ strategy_r1 = HUGE(strategy_r1)
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:120.1:
+
+ check_rel_err = .true.
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:122.1:
+
+ check_rel_err = .false.
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:123.1:
+
+ strategy_r2 = HUGE(strategy_r2)
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:127.1:
+
+ print *, "ERROR: [check_abs_err] and [check_rel_err] cannot both be non-positi
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:128.1:
+
+ stop
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:133.1:
+
+ check_step_use = check_step
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:138.1:
+
+ converge_time_use = converge_time
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:143.1:
+
+ lost_rate_use = lost_rate
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:155.1:
+
+ print *, "  check step     : ", check_step_use
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:156.1:
+
+ print *, "  converge time : ", converge_time_use
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:192.1:
+
+  err_now = 0
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:193.1:
+
+  do i = 2, nx-1
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:194.1:
+
+   do j = 2, ny-1
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:195.1:
+
+    err_now = err_now + to_dat(i,j)**2.0
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:196.1:
+
+   end do
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:197.1:
+
+  end do
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:204.1:
+
+  ratio = abs(ratio)
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:205.1:
+
+  if(err_before == 0) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:206.1:
+
+   stop_iteration = .true.
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:207.1:
+
+   if(debug == 2) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:208.1:
+
+    print *, "Error = 0, hardly to see this!"
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:209.1:
+
+   end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:210.1:
+
+  else if((err_now < strategy_r1) .and. (ratio < strategy_r2)) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:211.1:
+
+   converge_cnt = converge_cnt + 1
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:212.1:
+
+   lose_chance_cnt = 0
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:213.1:
+
+   if(debug == 2) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:214.1:
+
+    print *, "converge_cnt: ", converge_cnt
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:215.1:
+
+   end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:216.1:
+
+   if(converge_cnt >= converge_time_use)  then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:217.1:
+
+    stop_iteration = .true.
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:218.1:
+
+   end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:219.1:
+
+  else
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:220.1:
+
+   if(converge_cnt > 0) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:221.1:
+
+    lose_chance_cnt = lose_chance_cnt + 1
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:223.1:
+
+    if(lose_chance_cnt >= lost_rate_use) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:224.1:
+
+     converge_cnt = converge_cnt - 1
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:225.1:
+
+     lose_chance_cnt = 0
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:226.1:
+
+     if(debug == 2) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:227.1:
+
+      print *, "Lose one count! converge_cnt now is: ", converge_cnt
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:228.1:
+
+     end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:229.1:
+
+    end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:230.1:
+
+   end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:231.1:
+
+  end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:232.1:
+
+  err_before = err_now
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:233.1:
+
+ end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:236.1:
+
+ if(cnt == max_iter) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:237.1:
+
+  stop_iteration = .true.
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:238.1:
+
+  err = IOR(err, err_over_max_iteration)
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:239.1:
+
+  if(debug == 2) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:240.1:
+
+   print *, "Max iteration reached. Exit iteration."
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:241.1:
+
+  end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:242.1:
+
+ end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:243.1:
+
+ if(stop_iteration .eqv. .true.) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:244.1:
+
+  if(debug == 2) then
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:245.1:
+
+   print *, "iteration : ", cnt, ", err_avg = ", err_now, "fr_dat: "
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:246.1:
+
+  end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:247.1:
+
+  max_iter = cnt; strategy_r1 = err_now; strategy_r2 = ratio
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:248.1:
+
+  call judge_error(err)
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:249.1:
+
+  exit
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:250.1:
+
+ end if
+ 1
+Warning: Nonconforming tab character at (1)
+../../xtt-lib/elliptic_tools.f90:261.52:
+
+subroutine solve_elliptic_AC(max_iter, max_r, psi, a, c, f, workspace, dx, dy, 
+                                                    1
+Warning: Unused dummy argument 'a' at (1)
+../../xtt-lib/elliptic_tools.f90:261.55:
+
+subroutine solve_elliptic_AC(max_iter, max_r, psi, a, c, f, workspace, dx, dy, 
+                                                       1
+Warning: Unused dummy argument 'c' at (1)
+../../xtt-lib/elliptic_tools.f90:261.44:
+
+subroutine solve_elliptic_AC(max_iter, max_r, psi, a, c, f, workspace, dx, dy, 
+                                            1
+Warning: Unused dummy argument 'max_r' at (1)
+../../xtt-lib/elliptic_tools.f90:105.16:
+
+real(4) :: tmp_r, err_now, err_before, ratio 
+                1
+Warning: Unused variable 'tmp_r' declared at (1)
+../../xtt-lib/elliptic_tools.f90:71.18:
+
+integer :: i,j,cnt
+                  1
+Warning: Unused variable 'cnt' declared at (1)
+../../xtt-lib/elliptic_tools.f90: In function ‘solve_elliptic_ac’:
+../../xtt-lib/elliptic_tools.f90:306:0: warning: ‘ax1’ may be used uninitialized in this function [-Wmaybe-uninitialized]
+             to_dat(i,j) = fr_dat(i,j) + tmp_r / (ax1 + ax2 + cy1 + cy2)
+ ^
+../../xtt-lib/elliptic_tools.f90:306:0: warning: ‘ax2’ may be used uninitialized in this function [-Wmaybe-uninitialized]
+../../xtt-lib/elliptic_tools.f90:306:0: warning: ‘cy1’ may be used uninitialized in this function [-Wmaybe-uninitialized]
+../../xtt-lib/elliptic_tools.f90:306:0: warning: ‘cy2’ may be used uninitialized in this function [-Wmaybe-uninitialized]
+/usr/lib/gcc/x86_64-pc-cygwin/4.8.3/../../../../lib/libcygwin.a(libcmain.o): In function `main':
+/usr/src/debug/cygwin-1.7.32-1/winsup/cygwin/lib/libcmain.c:39: undefined reference to `WinMain'
+/usr/src/debug/cygwin-1.7.32-1/winsup/cygwin/lib/libcmain.c:39:(.text.startup+0x7e): relocation truncated to fit: R_X86_64_PC32 against undefined symbol `WinMain'
+collect2: error: ld returned 1 exit status

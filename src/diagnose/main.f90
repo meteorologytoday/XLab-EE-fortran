@@ -8,14 +8,26 @@ implicit none
 
 include "variables.f90"
 
-inquire(file="./debug_mode", exist=debug_mode);
+print *, "Dynamic Efficiency Diagnose Program"
+
+debug_mode = 0
+inquire(file="./debug_mode_1", exist=file_exists);
+if(file_exists .eqv. .true.) then
+    debug_mode = 1
+end if
+inquire(file="./debug_mode_2", exist=file_exists);
+if(file_exists .eqv. .true.) then
+    debug_mode = 2
+end if
 
 include "read-input.f90"
+print *, "Read input complete."
 include "initialize-variables.f90"
-
+print *, "Initialization complete."
 call cpu_time(time_beg)
 include "diagnose.f90"
 call cpu_time(time_end)
+print *, "Diagnose complete."
 
 include "write-output.f90"
 

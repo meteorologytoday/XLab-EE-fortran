@@ -15,8 +15,8 @@ import numpy as np;
 import eeenum;
 import writeDiagConfig as WDC;
 
-Lr = np.array([0.0, 1.0]); nr = 500;  Lr_span = Lr[1] - Lr[0];
-Lz = np.array([0.0, 1.0]);  nz = 500; Lz_span = Lz[1] - Lz[0];
+Lr = np.array([0.0, 1.0]); nr = 200;  Lr_span = Lr[1] - Lr[0];
+Lz = np.array([0.0, 1.0]);  nz = 200; Lz_span = Lz[1] - Lz[0];
 
 r_vec   = np.linspace(Lr[0], Lr[1], nr);
 z_vec   = np.linspace(Lz[0], Lz[1], nz);

@@ -91,15 +91,15 @@ end subroutine
 
 
 subroutine solve_elliptic(max_iter, check_step, converge_time, lost_rate, &
-&						  strategy_r1, strategy_r2, alpha, dat, coe, f, &
+&                         strategy_r1, strategy_r2, alpha, dat, coe, f, &
 &                         workspace, nx, ny, err, debug)
 implicit none
 real(4), intent(inout), target :: dat(nx,ny), workspace(nx, ny)
 real(4), intent(inout) :: strategy_r1, strategy_r2
 real(4), intent(in)    :: coe(9, nx, ny), f(nx, ny), alpha
-integer, intent(in)    :: nx, ny, check_step, converge_time, lost_rate
+integer, intent(in)    :: nx, ny, check_step, converge_time, lost_rate, debug
 integer, intent(inout) :: max_iter, err
-integer                :: debug, lose_chance_cnt, check_step_use, converge_cnt, converge_time_use, lost_rate_use
+integer                :: lose_chance_cnt, check_step_use, converge_cnt, converge_time_use, lost_rate_use
 
 integer :: i,j,cnt, tmp_err
 real(4) :: err_now, err_before, ratio 
@@ -110,41 +110,41 @@ logical :: check_abs_err, check_rel_err
 
 
 if (strategy_r1 > 0) then
-	check_abs_err = .true.
+    check_abs_err = .true.
 else
-	check_abs_err = .false.
-	strategy_r1 = HUGE(strategy_r1)
+    check_abs_err = .false.
+    strategy_r1 = HUGE(strategy_r1)
 end if
 
 if (strategy_r2 > 0) then
-	check_rel_err = .true.
+    check_rel_err = .true.
 else
-	check_rel_err = .false.
-	strategy_r2 = HUGE(strategy_r2)
+    check_rel_err = .false.
+    strategy_r2 = HUGE(strategy_r2)
 end if
 
 if((check_abs_err .eqv. .false.) .and. (check_rel_err .eqv. .false.)) then
-	print *, "ERROR: [check_abs_err] and [check_rel_err] cannot both be non-positive."
-	stop
+    print *, "ERROR: [check_abs_err] and [check_rel_err] cannot both be non-positive."
+    stop
 end if
 
 check_step_use = 100
 if(check_step > 0) then
-	check_step_use = check_step
+    check_step_use = check_step
 end if
 
 converge_time_use = 10
 if(converge_time > 0) then
-	converge_time_use = converge_time
+    converge_time_use = converge_time
 end if
 
 lost_rate_use = 5
 if(lost_rate > 0) then
-	lost_rate_use = lost_rate
+    lost_rate_use = lost_rate
 end if
 
 if(debug == 1 .or. debug == 2) then
-    print *, "# Solve Elliptic Inputs "
+    print *, "----- Solve Elliptic Inputs -----"
     print *, "  max_iter       : ", max_iter
     print *, "  strategy_r1    : ", strategy_r1
     print *, "  strategy_r2    : ", strategy_r2
@@ -152,8 +152,9 @@ if(debug == 1 .or. debug == 2) then
     print *, "  (nx, ny)       : (", nx, ", ", ny, ")"
     print *, "  alpha          : ", alpha
     print *, "  debug          : ", debug
-	print *, "  check step     : ", check_step_use
-	print *, "  converge time : ", converge_time_use
+    print *, "  check step     : ", check_step_use
+    print *, "  converge time : ", converge_time_use
+    print *, "---------------------------------"
 end if
 
 converge_cnt = 0
@@ -189,65 +190,70 @@ do cnt=1, max_iter
     to_dat(2:nx-1, 2:ny-1) = to_dat(2:nx-1,2:ny-1) - f(2:nx-1,2:ny-1)
 
     if(flag .eqv. .true.) then
-		err_now = 0
-		do i = 2, nx-1
-			do j = 2, ny-1
-				err_now = err_now + to_dat(i,j)**2.0
-			end do
-		end do
+        err_now = 0
+        do i = 2, nx-1
+            do j = 2, ny-1
+                err_now = err_now + to_dat(i,j)**2.0
+            end do
+        end do
         err_now = sqrt(err_now/((nx-2)*(ny-2)))
 
         ratio = (err_before - err_now) / err_before;
         if(debug == 2) then
-            print *, "Iter: ",cnt, "; err_now: ", err_now, "; ratio: ", ratio
+            write(*,'(A,I8,A,ES12.3E2,A,ES12.3E2)') "Iter: ",cnt, ", err_now: ", err_now, ", ratio: ", ratio
         end if
-		ratio = abs(ratio)
-		if(err_before == 0) then
-			stop_iteration = .true.
-			if(debug == 2) then
-				print *, "Error = 0, hardly to see this!"
-			end if
-		else if((err_now < strategy_r1) .and. (ratio < strategy_r2)) then
-			converge_cnt = converge_cnt + 1
-			lose_chance_cnt = 0
-			if(debug == 2) then
-				print *, "converge_cnt: ", converge_cnt
-			end if
-			if(converge_cnt >= converge_time_use)  then
-				stop_iteration = .true.
-			end if
-		else
-			if(converge_cnt > 0) then
-				lose_chance_cnt = lose_chance_cnt + 1
-			
-				if(lose_chance_cnt >= lost_rate_use) then
-					converge_cnt = converge_cnt - 1
-					lose_chance_cnt = 0
-					if(debug == 2) then
-						print *, "Lose one count! converge_cnt now is: ", converge_cnt
-					end if
-				end if
-			end if
-		end if
-		err_before = err_now
-	end if
-		
-	
-	if(cnt == max_iter) then
-		stop_iteration = .true.
-		err = IOR(err, err_over_max_iteration)
-		if(debug == 2) then
-			print *, "Max iteration reached. Exit iteration."
-		end if
-	end if
-	if(stop_iteration .eqv. .true.) then
-		if(debug == 2) then
-			print *, "iteration : ", cnt, ", err_avg = ", err_now, "fr_dat: "
-		end if
-		max_iter = cnt; strategy_r1 = err_now; strategy_r2 = ratio
-		call judge_error(err)
-		exit
-	end if
+        ratio = abs(ratio)
+        if(err_before == 0) then
+            stop_iteration = .true.
+            if(debug == 2) then
+                print *, "Error = 0, hardly to see this!"
+            end if
+        else if((err_now < strategy_r1) .and. (ratio < strategy_r2)) then
+            converge_cnt = converge_cnt + 1
+            lose_chance_cnt = 0
+            if(debug == 2) then
+                print *, "converge_cnt: ", converge_cnt
+            end if
+            if(converge_cnt >= converge_time_use)  then
+                stop_iteration = .true.
+            end if
+        else
+            if(converge_cnt > 0) then
+                lose_chance_cnt = lose_chance_cnt + 1
+            
+                if(lose_chance_cnt >= lost_rate_use) then
+                    converge_cnt = converge_cnt - 1
+                    lose_chance_cnt = 0
+                    if(debug == 2) then
+                        print *, "Lose one count! converge_cnt now is: ", converge_cnt
+                    end if
+                end if
+            end if
+        end if
+        err_before = err_now
+    end if
+
+    do i = 2,nx-1
+        do j = 2,ny-1
+            to_dat(i,j) = fr_dat(i,j) + alpha * to_dat(i,j) / (- coe(5,i,j))
+        end do
+    end do        
+    
+    if(cnt == max_iter) then
+        stop_iteration = .true.
+        err = IOR(err, err_over_max_iteration)
+        if(debug == 2) then
+            print *, "Max iteration reached. Exit iteration."
+        end if
+    end if
+    if(stop_iteration .eqv. .true.) then
+        if(debug == 2) then
+            print *, "iter : ", cnt, ", err_avg = ", err_now
+        end if
+        max_iter = cnt; strategy_r1 = err_now; strategy_r2 = ratio
+        call judge_error(err)
+        exit
+    end if
 end do
 
 if(associated(to_dat, dat) .eqv. .false.) then

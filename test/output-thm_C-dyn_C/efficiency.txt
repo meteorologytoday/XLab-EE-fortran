@@ -1,0 +1,17 @@
+ Time elapsed (sec):    534.453003    
+ sum Q                 :    8.36247801E+12
+ # Boundary efficiency
+ # Internal efficiency
+ eta [L(B=0)    = dB]     wo/ boundary :    1.10345003E+11 ,    1.31952520E-02
+ eta [L(B=dB)   = dB]     wo/ boundary :    1.22008584E+11 ,    1.45900035E-02
+ eta [L(B=B0)   = dB]     wo/ boundary :    1.10764196E+11 ,    1.32453796E-02
+ eta [L(B=B0dB) = dB]     wo/ boundary :    1.20347746E+11 ,    1.43913981E-02
+ eta [L(B=0)    = B0]     wo/ boundary :    0.00000000     ,    0.00000000    
+ eta [L(B=dB)   = B0]     wo/ boundary :    0.00000000     ,    0.00000000    
+ eta [L(B=B0)   = B0]     wo/ boundary :    0.00000000     ,    0.00000000    
+ eta [L(B=B0dB) = B0]     wo/ boundary :    0.00000000     ,    0.00000000    
+ # wtheta integral
+ wtheta [L(B=0)    = J F] w/  boundary :    1.12409641E+11 ,    1.34421447E-02
+ wtheta [L(B=B0)   = J F] w/  boundary :    1.15210510E+11 ,    1.37770781E-02
+ wtheta [L(B=dB)   = J F] w/  boundary :    1.23543134E+11 ,    1.47735076E-02
+ wtheta [L(B=B0dB) = J F] w/  boundary :    1.25236986E+11 ,    1.49760619E-02

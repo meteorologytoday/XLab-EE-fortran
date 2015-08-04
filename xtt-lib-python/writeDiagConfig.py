@@ -2,6 +2,7 @@ import eeenum;
 
 def emptySetting():
 	return {
+		'DIAGNOSE_PARAMETER' : eeenum.DIAGNOSE_PARAMETER.NONE,
 		'GEOMETRY' : eeenum.GEOMETRY.CYLINDRICAL,
 		'DENSITY'  : eeenum.DENSITY.NORMAL,
 		'OPERATOR_COMPLEXITY' : eeenum.OPERATOR_COMPLEXITY.BAROTROPIC,
@@ -23,7 +24,7 @@ def emptySetting():
 def writeDiagnoseFile(file_path, setting):
 	try:
 		diag_file = open(file_path, 'w');
-		diag_file.write('%s-%s-%s   // geometry-density-operator_complexity\n'         % (setting['GEOMETRY'], setting['DENSITY'], setting['OPERATOR_COMPLEXITY']));
+		diag_file.write('%s-%s-%s-%s   // geometry-density-operator_complexity\n'         % (setting['DIAGNOSE_PARAMETER'],setting['GEOMETRY'], setting['DENSITY'], setting['OPERATOR_COMPLEXITY']));
 		if setting['GEOMETRY'] == eeenum.GEOMETRY.CYLINDRICAL:
 			diag_file.write('%f %f %f %f // domain size\n'  % (setting['DOMAIN_RANGE']['horizontal'][0],
 													 setting['DOMAIN_RANGE']['horizontal'][1],

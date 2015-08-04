@@ -24,6 +24,7 @@ r_vec   = np.linspace(Lr[0], Lr[1], nr);
 z_vec   = np.linspace(Lz[0], Lz[1], nz);
 
 setting_opt = {
+		'DIAGNOSE_PARAMETER' : eeenum.DIAGNOSE_PARAMETER.DYNAMIC_EFFICIENCY,
 		'GEOMETRY' : eeenum.GEOMETRY.CYLINDRICAL,
 		'DENSITY'  : eeenum.DENSITY.NORMAL,
 		'OPERATOR_COMPLEXITY' : eeenum.OPERATOR_COMPLEXITY.BAROTROPIC,

@@ -1,4 +1,4 @@
-CYLINDRICAL-DENSITY_NORMAL-BAROTROPIC   // geometry-density-operator_complexity
+DYNAMIC_EFFICIENCY-CYLINDRICAL-DENSITY_NORMAL-BAROTROPIC   // geometry-density-operator_complexity
 0.000000 1.000000 0.000000 1.000000 // domain size
 200 200 // grid points
 .    // input folder

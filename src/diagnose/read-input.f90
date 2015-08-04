@@ -9,32 +9,44 @@ do i=1, size(word)
     end if
 end do
 
-if(word(1) == 'CYLINDRICAL') then
-    geometry = CYLINDRICAL_MODE
-else if(word(1) == 'SPHERICAL') then
-    geometry = SPHERICAL_MODE
+if(word(1) == 'DYNAMIC_EFFICIENCY') then
+    diag_param = DIAGPARAM_DYNAMIC_EFFICIENCY
+else if(word(1) == 'SECONDARY_CIRCULATION') then
+    diag_param = DIAGPARAM_SECONDARY_CIRCULATION
+else if(word(1) == 'NONE') then
+    diag_param = DIAGPARAM_NONE
 else
     call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(1)) // "]")
     stop
 end if
 
-if(word(2) == 'DENSITY_NORMAL') then
+
+if(word(2) == 'CYLINDRICAL') then
+    geometry = CYLINDRICAL_MODE
+else if(word(2) == 'SPHERICAL') then
+    geometry = SPHERICAL_MODE
+else
+    call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(2)) // "]")
+    stop
+end if
+
+if(word(3) == 'DENSITY_NORMAL') then
     density_mode = 0
-else if(word(2) == 'DENSITY_BOUSSINESQ') then
+else if(word(3) == 'DENSITY_BOUSSINESQ') then
     density_mode = 1
 else
     call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(3)) // "]")
     stop
 end if
 
-if(word(3) == 'BARO_ALL') then
+if(word(4) == 'BARO_ALL') then
     operator_complexity = 2
-else if(word(3) == 'BAROCLINIC') then
+else if(word(4) == 'BAROCLINIC') then
     operator_complexity = 1
-else if(word(3) == 'BAROTROPIC') then
+else if(word(4) == 'BAROTROPIC') then
     operator_complexity = 0
 else
-    call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(3)) // "]" )
+    call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(4)) // "]" )
     stop
 end if
 
@@ -75,6 +87,7 @@ call read_input(stdin, buffer);
 read(buffer, *) saved_strategy_strf_r1, saved_strategy_strf_r2, saved_max_iter_strf, alpha_strf;
 
 print *, "----- Diagnose Input -----"
+print *, "Diagnose parameter: ", diag_param
 print *, "Geometry: ", geometry
 print *, "Density distribution: ", density_mode
 print *, "Operator complexity: ", operator_complexity

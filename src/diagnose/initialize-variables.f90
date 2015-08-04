@@ -14,10 +14,20 @@ allocate(sin_table(nr));
 
 allocate(solverA_A(nr-1, nz-2)); allocate(solverB_B(nr-1, nz-1));allocate(solverC_C(nr-2, nz-1));
 allocate(saved_solverB_B(nr-1, nz-1));
-allocate(eta(nr-1,nz));
+
 allocate(ra(nr));       allocate(za(nz));          allocate(rho(nz));
 allocate(rcuva(nr));
 allocate(exner(nz));
+
+if(diag_param == DIAGPARAM_DYNAMIC_EFFICIENCY) then
+    allocate(eta(nr-1,nz));
+else if(diag_param == DIAGPARAM_SECONDARY_CIRCULATION) then
+    allocate(w_A(nr-1,nz));
+    allocate(u_C(nr,nz-1));
+end if
+
+
+
 print *, "Allocation complete."
 
 call read_2Dfield(15, trim(input_folder)//"/"//A_file, rhoA_in, nr, nz)

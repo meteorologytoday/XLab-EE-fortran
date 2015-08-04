@@ -2,11 +2,16 @@ integer, parameter :: ERROR_INPUT = 1
 
 
 real(4), parameter :: MATH_PI = acos(-1.0), RAD2DEG = 180.0 / MATH_PI, DEG2RAD = MATH_PI / 180.0
-integer, parameter :: stdin=5, fd=15, CYLINDRICAL_MODE=0, SPHERICAL_MODE=1
-integer        :: nr, nz
+integer, parameter :: stdin=5, fd=15, &
+&                     CYLINDRICAL_MODE=0, SPHERICAL_MODE=1, &
+&                     DIAGPARAM_DYNAMIC_EFFICIENCY = 0, &
+&                     DIAGPARAM_SECONDARY_CIRCULATION = 1, &
+&                     DIAGPARAM_NONE = 2
+
+integer        :: nr, nz, diag_param
 character(256) :: A_file, B_file, C_file, forcing_file, input_folder, output_folder, &
 &                 output_file, bc_init_file, mode_str,          &
-&                 word(3), buffer, format_str
+&                 word(4), buffer, format_str
 
 
 
@@ -32,7 +37,7 @@ real(4), pointer   :: strf(:,:), f(:,:),coe(:, :, :),   &
 &                     solverA_A(:,:), solverB_B(:,:), solverC_C(:,:),          &
 &                     saved_solverB_B(:,:),          &
 &                     rhoA_A(:,:), rhoB_B(:,:), rhoB_C(:,:), rhoC_C(:,:),      &
-&                     eta(:,:),       &
+&                     eta(:,:), u_C(:,:), w_A(:,:),      &
 &                     ra(:), rcuva(:), za(:), exner(:), rho(:),                &
 &                     bc_init_in(:,:)
 

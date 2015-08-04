@@ -6,20 +6,517 @@ use read_input_tools
 use message_tools
 implicit none
 
-include "variables.f90"
 
+
+real(4), parameter :: MATH_PI = acos(-1.0), RAD2DEG = 180.0 / MATH_PI, DEG2RAD = MATH_PI / 180.0
+integer, parameter :: stdin=5, fd=15, CYLINDRICAL_MODE=0, SPHERICAL_MODE=1
+integer        :: nr, nz
+character(256) :: A_file, B_file, C_file, Q_file, F_file, input_folder, output_folder, &
+&                 output_file, yes_or_no, rchi_bc_file, rpsi_bc_file, mode_str,          &
+&                 word(4), buffer
+
+
+
+! Grid point are designed as follows: 
+! O A O
+! C B C
+! O A O
+! 
+! O  : (nr   , nz  ) rpsi rchi rhoA_in rhoB_in rhoC_in Q_in f dthetadr
+! A  : (nr-1 , nz  ) w eta
+! B  : (nr-1 , nz-1) m theta F Q solver_B
+! C  : (nr   , nz-1) u
+! sA : (nr-1 , nz-2) solver_A
+! sC : (nr-2 , nz-1) solver_C
+!
+
+
+real(4), pointer   :: rpsi(:,:), rchi(:,:), f(:,:), Q_in(:,:), coe(:, :, :),   &
+&                     F_in(:,:), sin_table(:),                                 &
+&                     rhoA_in(:,:), rhoB_in(:,:), rhoC_in(:,:),                &
+&                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),      &
+&                     solverA_A(:,:), solverB_B(:,:), solverC_C(:,:),          &
+&                     solver_b_basic_B(:,:), solver_B_anomaly_B(:,:),          &
+&                     JJ_B(:,:), RHS_rpsi_thm(:,:), RHS_rpsi_mom(:,:),         &
+&                     rhoA_A(:,:), rhoB_B(:,:), rhoB_C(:,:), rhoC_C(:,:),      &
+&                     w_A(:,:), u_C(:,:), theta(:,:), eta(:,:), m2(:,:),       &
+&                     ra(:), rcuva(:), za(:), exner(:), rho(:),                &
+&                     rpsi_bc(:,:), rchi_bc(:,:), wtheta_B(:,:), f_basic(:,:), &
+&                     f_anomaly(:,:), b_basic_B(:,:), b_anomaly_B(:,:),        &
+&                     bndconv(:,:)
+
+real(4)            :: testing_dt, Lr(2), Lz(2), Lat(2), dr, dz, dlat,          &
+                      eta_avg_b, eta_avg_nob,  &
+                      time_beg, time_end
+
+real(4)            :: m_ref
+integer            :: m_ref_r, m_ref_z
+
+integer :: saved_strategy_rpsi, max_iter_rpsi, &
+&          saved_strategy_rchi, max_iter_rchi, strategy
+real(4) :: saved_strategy_rpsi_r, saved_strategy_rchi_r, strategy_r, alpha,  &
+&          alpha_rpsi, alpha_rchi
+
+integer :: i,j, m, n, err, mode(size(word))
+real(4) :: r, z, tmp1, tmp2, tmp3, planet_radius,&
+&          sum_Q, sum_dtheta_dt, &
+&          sum_Qeta_0_0  , sum_Qeta_dB_0  , sum_Qeta_B0_0  , sum_Qeta_B0dB_0 , &
+&          sum_Qeta_0_dB , sum_Qeta_dB_dB , sum_Qeta_B0_dB , sum_Qeta_B0dB_dB, &
+&          sum_Qeta_0_B0 , sum_Qeta_dB_B0 , sum_Qeta_B0_B0 , sum_Qeta_B0dB_B0, &
+&          sum_wtheta_0_JF, sum_wtheta_dB_JF, sum_wtheta_B0_JF, sum_wtheta_B0dB_JF, &
+&          sum_bndconv_0, sum_bndconv_dB, sum_bndconv_B0, sum_bndconv_B0dB, &
+&          sum_bndconv2_0,sum_bndconv2_dB,sum_bndconv2_B0,sum_bndconv2_B0dB
+
+logical :: file_exists, use_rchi_bc, use_rpsi_bc, debug_mode
 
 inquire(file="./debug_mode", exist=debug_mode);
 
 call cpu_time(time_beg)
 
-include "read-control-file.f90"
-include "initialize-variables.f90"
+! Read setting
+call read_input(stdin, mode_str)
+do i=1, size(word)
+    if(split_line(mode_str, word(i), "-") /= 0 .and. i /= size(word)) then
+        call error_msg("INIT", 1, "Mode number is not correct")
+        stop
+    end if
+    print *, "READ:::", word(i)
+end do
+
+mode(:) = 0
+if(word(1) == 'CYLINDRICAL') then
+    mode(1) = CYLINDRICAL_MODE
+else if(word(1) == 'SPHERICAL') then
+    mode(1) = SPHERICAL_MODE
+else
+    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(1)) // "]")
+    stop
+end if
+
+if(word(2) == 'TENDENCY') then
+    mode(2) = 0
+else if(word(2) == 'INSTANT') then
+    mode(2) = 1
+else
+    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(2)) // "]")
+    stop
+end if
+
+if(word(3) == 'DENSITY_NORMAL') then
+    mode(3) = 0
+else if(word(3) == 'DENSITY_BOUSSINESQ') then
+    mode(3) = 1
+else
+    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(3)) // "]")
+    stop
+end if
+if(word(4) == 'BARO_ALL') then
+    mode(4) = 2
+else if(word(4) == 'BAROCLINIC') then
+    mode(4) = 1
+else if(word(4) == 'BAROTROPIC') then
+    mode(4) = 0
+else
+    call error_msg("INIT", 1, "Unknown Mode : [" // trim(word(4)) // "]" )
+    stop
+end if
+
+
+! TENDENCY MODE
+if(mode(2) == 0) then
+    call read_input(stdin, buffer); read(buffer, *) testing_dt
+end if
+
+if(mode(1) == CYLINDRICAL_MODE) then
+    call read_input(stdin, buffer); read(buffer, *) Lr(1), Lr(2), Lz(1), Lz(2);
+else if(mode(1) == SPHERICAL_MODE) then
+    call read_input(stdin, buffer); read(buffer, *) planet_radius, Lz(1), Lz(2);
+    Lat(1) = -90.0; Lat(2) = 90.0;
+    Lr(1) = Lat(1) * DEG2RAD * planet_radius
+    Lr(2) = Lat(2) * DEG2RAD * planet_radius
+end if
+
+call read_input(stdin, buffer); read(buffer, *) nr, nz;
+call read_input(stdin, input_folder);
+call read_input(stdin, output_folder);
+call read_input(stdin, A_file);
+call read_input(stdin, B_file);
+call read_input(stdin, C_file);
+call read_input(stdin, Q_file);
+call read_input(stdin, F_file);
+
+call read_input(stdin, buffer);
+read(buffer, *) saved_strategy_rpsi, saved_strategy_rpsi_r, max_iter_rpsi, alpha_rpsi;
+
+call read_input(stdin, buffer);
+read(buffer, *) saved_strategy_rchi, saved_strategy_rchi_r, max_iter_rchi, alpha_rchi;
+
+call read_input(stdin, yes_or_no)
+if(yes_or_no == 'yes') then
+    call read_input(stdin, rpsi_bc_file);
+    use_rpsi_bc = .true.
+else
+    use_rpsi_bc = .false.
+end if
+call read_input(stdin, yes_or_no)
+if(yes_or_no == 'yes') then
+    call read_input(stdin, rchi_bc_file);
+    use_rchi_bc = .true.
+else
+    use_rchi_bc = .false.
+end if
+
+
+print *, "mode: ", mode(1), ",", mode(2),",",mode(3),",",mode(4)
+if(mode(2) == 0) then
+    print *, "Testing time: ", testing_dt
+end if
+if(mode(1) == CYLINDRICAL_MODE) then 
+    print *, "Lr:", Lr(1), Lr(2)
+    print *, "Lz:", Lz(1), Lz(2)
+else if(mode(1) == SPHERICAL_MODE) then
+    print *, "Using spherical mode, domain is forced to be global."
+    print *, "Planet Radius: ", planet_radius
+    print *, "Lat:", Lat(1), Lat(2)
+    print *, "Lz:", Lz(1), Lz(2)
+end if
+
+print *, "nr:", nr, ", nz:", nz
+print *, "Input folder: ", trim(input_folder)
+print *, "Output folder: ", trim(output_folder)
+print *, "A file: ", trim(A_file)
+print *, "B file: ", trim(B_file)
+print *, "C file: ", trim(C_file)
+print *, "Q file: ", trim(Q_file)
+print *, "F file: ", trim(F_file)
+print *, "rpsi's strategy, residue, iter: ", saved_strategy_rpsi, &
+&           saved_strategy_rpsi_r, max_iter_rpsi, alpha_rpsi
+print *, "rchi's strategy, residue, iter: ", saved_strategy_rchi, &
+&           saved_strategy_rchi_r, max_iter_rchi, alpha_rchi
+
+if(use_rpsi_bc .eqv. .true.) then
+    print *, "Use rpsi boundary condition: Yes (", trim(rpsi_bc_file), ")"
+else
+    print *, "Use rpsi boundary condition: No "
+end if
+
+if(use_rchi_bc .eqv. .true.) then
+    print *, "Use rchi boundary condition: Yes (", trim(rchi_bc_file), ")"
+else
+    print *, "Use rpsi boundary condition: No "
+end if
+
+
+allocate(rpsi(nr,nz));   allocate(rchi(nr,nz));   
+allocate(f(nr,nz));     allocate(Q_in(nr-1,nz-1)); allocate(JJ_B(nr-1,nz-1));
+allocate(F_in(nr-1,nz-1));
+allocate(RHS_rpsi_thm(nr,nz)); allocate(RHS_rpsi_mom(nr,nz));
+allocate(wksp_O(nr,nz));
+allocate(wksp_A(nr-1,nz));
+allocate(wksp_B(nr-1,nz-1));
+allocate(wksp_C(nr,nz-1));
+allocate(f_basic(nr,nz));
+allocate(f_anomaly(nr,nz));
+
+allocate(coe(9,nr,nz));
+allocate(rhoA_in(nr, nz));  allocate(rhoB_in(nr, nz));   allocate(rhoC_in(nr, nz));
+allocate(rhoA_A(nr-1, nz)); allocate(rhoB_C(nr, nz-1));  allocate(rhoB_B(nr-1,nz-1));
+allocate(rhoC_C(nr, nz-1)); 
+allocate(b_basic_B(nr-1,nz-1));                    allocate(b_anomaly_B(nr-1,nz-1));
+allocate(sin_table(nr));
+
+allocate(solverA_A(nr-1, nz-2)); allocate(solverB_B(nr-1, nz-1));allocate(solverC_C(nr-2, nz-1));
+allocate(solver_b_basic_B(nr-1, nz-1));
+allocate(solver_b_anomaly_B(nr-1, nz-1));
+allocate(wtheta_B(nr-1,nz-1));
+allocate(w_A(nr-1,nz)); allocate(u_C(nr,nz-1));
+allocate(theta(nr-1,nz-1)); allocate(eta(nr-1,nz)); allocate(m2(nr-1,nz-1));
+allocate(ra(nr));       allocate(za(nz));          allocate(rho(nz));
+allocate(rcuva(nr));      
+allocate(exner(nz));    allocate(bndconv(nr-1,2));
+
+call read_2Dfield(15, trim(input_folder)//"/"//A_file, rhoA_in, nr, nz)
+call read_2Dfield(15, trim(input_folder)//"/"//B_file, rhoB_in, nr, nz)
+call read_2Dfield(15, trim(input_folder)//"/"//C_file, rhoC_in, nr, nz)
+call read_2Dfield(15, trim(input_folder)//"/"//Q_file, Q_in, nr, nz)
+call read_2Dfield(15, trim(input_folder)//"/"//F_file, F_in, nr, nz)
+
+if(use_rpsi_bc .eqv. .true.) then
+    allocate(rpsi_bc(nr,nz));
+    call read_2Dfield(15, trim(input_folder)//"/"//rpsi_bc_file, rpsi_bc, nr, nz)
+end if
+
+
+if(use_rchi_bc .eqv. .true.) then
+    allocate(rchi_bc(nr,nz));
+    call read_2Dfield(15, trim(input_folder)//"/"//rchi_bc_file, rchi_bc, nr, nz)
+end if
+
+
+! ### Calculate dr, dz, dlat, ra, rcuva, za, exner, rho (pseudo-density)
+dr = (Lr(2) - Lr(1)) / (nr-1); dz = (Lz(2) - Lz(1)) / (nz-1);
+
+do i=1,nr
+    ra(i) = Lr(1) + (i-1) * dr
+end do
+
+! Notice the mode(3) specifies rho to be constant or not
+do j=1,nz
+    za(j) = Lz(1) + (j-1) * dz
+    exner(j) = merge(1.0 - za(j) / h0, 1.0, mode(3) == 0)
+    rho(j) = merge(p0 / (theta0 * Rd) * exner(j)**(1.0 / kappa - 1.0), 1.0, &
+&                   mode(3) == 0)
+end do
+
+
+if(mode(1) == 0) then
+    rcuva = ra 
+else if(mode(1) == 1) then
+    dlat = (Lat(2) - Lat(1)) / (nr-1)
+    do i=1, nr
+        rcuva(i) = planet_radius * cos(Lat(1) + (i-1) * dlat)
+        sin_table(i) = sin(Lat(1) + (i-1) * dlat)
+    end do
+end if
+
+
+! ### sum Q ### !
+sum_Q = cal_sum_Q(Q_in);
+
+! ### Normalize coefficient solverA_A = a / (rho * r), solverB_B = b / (rho * r)
+!                         , solverC_C = c / (rho * r)
+
+do i=1,nr-1
+    do j=1,nz-2
+        solverA_A(i,j) = (rhoA_in(i,j+1) + rhoA_in(i+1,j+1))         &
+            &           / (rcuva(i) + rcuva(i+1)) / rho(j+1)
+    end do
+end do
+
+
+do i=1,nr-1
+    do j=1,nz-1
+        solverB_B(i,j) = ( rhoB_in(i  ,j  ) + rhoB_in(i+1,j  )       &
+            &             + rhoB_in(i  ,j+1) + rhoB_in(i+1,j+1) )     &
+            &             /(rcuva(i)+rcuva(i+1))/(rho(j)+rho(j+1))
+    end do
+end do
+
+solver_b_basic_B = solverB_B
+
+do i=1,nr-2
+    do j=1,nz-1
+        solverC_C(i,j) = (rhoC_in(i+1,j) + rhoC_in(i+1,j+1))         &
+            &           / rcuva(i+1) / (rho(j)+rho(j+1))  
+    end do
+end do
+
+
+if(hasNan2(solverA_A)) then
+    print *, "SOLVER a has NAN"
+end if
+if(hasNan2(solverB_B)) then
+    print *, "SOLVER b has NAN"
+end if
+if(hasNan2(solverC_C)) then
+    print *, "SOLVER c has NAN"
+end if
+
+
+
+! ### Calculate rhoA_A, rhoB_C, rhoB_B, rhoC_C
+
+do i=1,nr-1
+    do j=1,nz
+        rhoA_A(i,j) = (rhoA_in(i,j) + rhoA_in(i+1,j)) / 2.0
+    end do
+end do
+
+do i=1,nr
+    do j=1,nz-1
+        rhoB_C(i,j) = (rhoB_in(i,j) + rhoB_in(i,j+1)) / 2.0
+    end do
+end do
+
+do i=1,nr-1
+    do j=1,nz-1
+        rhoB_B(i,j) = ( rhoB_in(i  ,j  ) + rhoB_in(i+1,j  )       &
+            &      + rhoB_in(i  ,j+1) + rhoB_in(i+1,j+1) ) /4.0
+    end do
+end do
+
+b_basic_B = rhoB_B ! Copy basic state
+
+do i=1,nr
+    do j=1,nz-1
+        rhoC_C(i,j) = (rhoC_in(i,j) + rhoC_in(i,j+1)) / 2.0
+    end do
+end do
+
+! ### Derive angular momentum square from C term (rhoC_C)
+! The integration order matters! Please be aware of it.
+
+if(mode(1) == CYLINDRICAL_MODE) then
+
+    m2(1,:) = (((rcuva(2) - rcuva(1)) / 4.0)**3.0) * rhoC_C(i,j) * (ra(2) - ra(1)) / 2.0
+    
+    do i=1, nr-1
+        do j=1, nz-1
+            m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0
+        end do
+    end do
+
+else if(mode(1) == SPHERICAL_MODE) then
+
+    m2(1,:) = (((rcuva(2) - rcuva(1)) / 4.0)**3.0) * rhoC_C(i,j) * (ra(2) - ra(1)) / 2.0 &
+        &     / ((sin_table(2) + 3.0 * sin_table(1)) / 4.0)
+
+    do i = 2, nr-1
+        do j = 1, nz-1
+            m2(i,j) = m2(i-1,j) + (rcuva(i)**3.0) * rhoC_C(i,j) * (ra(i+1) - ra(i-1)) / 2.0 &
+                &    / sin_table(i)
+        end do
+    end do
+end if
+
+! ### Assign JJ_in JJ_B
+do i=1,nr-1
+    do j=1,nz-1
+        JJ_B(i,j) = Q_in(i,j) / (Cp * exner(j))
+    end do
+end do
+
+call write_2Dfield(11, trim(output_folder)//"/J-B.bin",     JJ_B, nr-1, nz-1)
+call write_2Dfield(11, trim(output_folder)//"/solver_a-sA.bin", solverA_A, nr-1, nz-2)
+call write_2Dfield(11, trim(output_folder)//"/solver_b-B.bin", solverB_B, nr-1, nz-1)
+call write_2Dfield(11, trim(output_folder)//"/solver_c-sC.bin", solverC_C, nr-2, nz-1)
+
+
+! ### Assign 1st part of RHS = g0/theta0 * dJJ/dr
+RHS_rpsi_thm = 0.0
+call d_dr_B2C(JJ_B, wksp_C)
+!print *, "djdr max: " , maxval(abs(wksp_C))
+! wksp_C to f
+do i=2,nr-1
+    do j=2,nz-1
+        RHS_rpsi_thm(i,j) = (wksp_C(i,j)+wksp_C(i,j-1))/2.0
+    end do
+end do
+!print *, "djdr max: " , maxval(abs(djdr))
+RHS_rpsi_thm = RHS_rpsi_thm * g0 / theta0
+!print *, "djdr max: " , maxval(abs(djdr))
+
+call write_2Dfield(11, trim(output_folder)//"/RHS_rpsi_thm-O.bin", RHS_rpsi_thm, nr, nz)
+
+
+! ### Assign 2nt part of RHS = - 2 * rcuv^(-2) * d(mf)/dz
+RHS_rpsi_mom = 0.0
+do i=1,nr-1
+    do j=1,nz-1
+         wksp_B(i,j) = sqrt(m2(i,j)) * F_in(i,j)
+    end do
+end do
+
+!if(hasNan2(wksp_B)) then
+!    print *, "wksp_B has NAN"
+!end if
+call d_dz_B2A(wksp_B, wksp_A)
+!if(hasNan2(wksp_B)) then
+!    print *, "wksp_A has NAN"
+!end if
+
+! wksp_A to f
+do i=2,nr-1
+    do j=2,nz-1
+         ! Notice that 2.0 factor of averge wksp_A cancelled by another in 2*m*F
+         RHS_rpsi_mom(i,j) = - (wksp_A(i,j) + wksp_A(i-1,j))/(rcuva(i)**2.0)
+        
+    end do
+!    print *, "rcuva(",i,") = ", rcuva(i)
+end do
+
+    
+!print *, "RHS_rpsi_mom max: " , maxval(abs(djdr))
+call write_2Dfield(11, trim(output_folder)//"/RHS_rpsi_mom-O.bin", RHS_rpsi_mom, nr, nz)
+
+
+
 print *, "Initialization complete."
 
 ! TENDENCY MODE
 if(mode(2) == 0) then
-    include "tendency.f90"
+    ! ### STAGE I : invert to get rpsi  !
+    call cal_coe(solverA_A, solverB_B, solverC_C, coe, dr, dz, nr, nz, err)
+    rpsi = 0.0
+    if(use_rpsi_bc .eqv. .true.) then
+        rpsi = rpsi_bc
+    end if
+
+    print *, "Solving rpsi..."
+    f = RHS_rpsi_thm + RHS_rpsi_mom
+    strategy = saved_strategy_rpsi; strategy_r = saved_strategy_rpsi_r
+    alpha = alpha_rpsi
+    call solve_elliptic(max_iter_rpsi, strategy, strategy_r, alpha, rpsi, coe, f, wksp_O, nr, nz, err, &
+        & merge(1,0,debug_mode .eqv. .true.))
+    print *, "Relaxation uses ", strategy, " steps. Final residue is ", strategy_r, "."
+
+    call write_2Dfield(11, trim(output_folder)//"/rpsi_before-O.bin", rpsi, nr, nz)
+
+    ! ### STAGE II : forcast thermal field to generate f  !
+
+    ! calculate u, w and dtheta_dt
+    call rpsiToUW(rpsi, u_C, w_A)
+
+    theta = 0.0
+    do i=1,nr-1
+        do j=1,nz-1
+            ! dtheta/dt = J - w dtheta/dz - u dtheta/dr
+            theta(i,j) = JJ_B(i,j) - theta0/g0 * ( rhoA_A(i,j  ) * w_A(i,j  )         &
+            &                                + rhoA_A(i,j+1) * w_A(i,j+1) ) / 2.0 &
+            &                  + theta0/g0 * ( rhoB_C(i  ,j) * u_C(i  ,j)         &
+            &                                + rhoB_C(i+1,j) * u_C(i+1,j) ) / 2.0 
+        end do
+    end do
+
+    print *, "Max dtheta_dt: ", maxval(theta)
+
+    call write_2Dfield(11, trim(output_folder)//"/w_before-A.bin",w_A,nr-1,nz)
+    call write_2Dfield(11, trim(output_folder)//"/u_before-C.bin",u_C,nr,nz-1)
+    call write_2Dfield(11, trim(output_folder)//"/dtheta_dt-B.bin", theta,nr-1,nz-1)
+    
+    sum_dtheta_dt = integrate_weight_B(theta);
+     
+    theta = theta * testing_dt
+    ! Calculate forced B field, A and C assumed to be unperturbed for now
+    ! dtheta/dr for f
+    call d_dr_B2B(theta, wksp_B)
+    b_anomaly_B = -g0/theta0 * wksp_B ! Copy anomaly
+    rhoB_B = rhoB_B + b_anomaly_B
+    
+    ! Notice that solver only needs 2:nz-1,
+    ! so the value of rhoA_A on top and bottom boundary is not important.
+    ! recalculate rhoA_A is for the checking step
+    call d_dz_B2A(theta, wksp_A)
+    rhoA_A(:,2:nz-1) = rhoA_A(:,2:nz-1) + g0 / theta0 * wksp_A(:,2:nz-1)
+
+    ! Update rhoB_C 
+    do i=2, nr-1
+        do j=1, nz-1
+            rhoB_C(i,j) = ( rhoB_B(i-1, j  ) &
+                   &      + rhoB_B(i  , j  ) )/2.0
+        end do
+    end do
+    call relativeTheta(theta, rhoA_A * (theta0 / g0), rhoB_C * (- theta0 / g0))
+    call write_2Dfield(11,trim(output_folder)//"/theta_after-B.bin",theta,nr-1,nz-1)
+
+
+    do i=1,nr-1
+        do j=1,nz-1
+            solver_b_anomaly_B(i,j) = b_anomaly_B(i,j)          &
+            &  / ((rcuva(i)+rcuva(i+1))/2.0)/((rho(j)+rho(j+1))/2.0)
+        end do
+    end do
+
 end if
 ! ### STAGE III : Solve !
 

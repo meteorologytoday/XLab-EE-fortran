@@ -7,9 +7,8 @@ integer, parameter :: stdin=5, fd=15, &
 
 integer        :: nr, nz
 character(256) :: A_file, B_file, C_file, Q_file, F_file, &
-                  input_folder, output_folder, &
-&                 bc_init_file, mode_str,          &
-&                 word(2), buffer, format_str
+&                 input_folder, output_folder, &
+&                 mode_str, word(2), buffer, format_str
 
 ! Grid point are designed as follows: 
 ! O A O
@@ -23,8 +22,6 @@ character(256) :: A_file, B_file, C_file, Q_file, F_file, &
 ! sA : (nr-1 , nz-2) solver_A
 ! sC : (nr-2 , nz-1) solver_C
 !
-
-
 real(4), pointer   :: strf(:,:), f(:,:),coe(:, :, :),   &
 &                     sin_table(:),                                 &
 &                     rhoA_in(:,:), rhoB_in(:,:), rhoC_in(:,:), &
@@ -33,11 +30,9 @@ real(4), pointer   :: strf(:,:), f(:,:),coe(:, :, :),   &
 &                     solverA_A(:,:), solverB_B(:,:), solverC_C(:,:),          &
 &                     rhoA_A(:,:), rhoB_B(:,:), rhoB_C(:,:), rhoC_C(:,:),      &
 &                     u_C(:,:), w_A(:,:),      &
-&                     ra(:), rcuva(:), za(:), exner(:), rho(:),                &
-&                     bc_init_in(:,:)
+&                     ra(:), rcuva(:), za(:), exner(:), rho(:)
 
 real(4)            :: Lr(2), Lz(2), Lat(2), dr, dz, dlat,          &
-                      eta_avg_b, eta_avg_nob,  &
                       time_beg, time_end
 
 integer :: saved_strategy_strf, max_iter_strf, saved_max_iter_strf, strategy

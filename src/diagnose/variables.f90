@@ -36,7 +36,6 @@ real(4), pointer   :: strf(:,:), f(:,:),coe(:, :, :),   &
 &                     wksp_O(:,:), wksp_A(:,:), wksp_B(:,:), wksp_C(:,:),      &
 &                     solverA_A(:,:), solverB_B(:,:), solverC_C(:,:),          &
 &                     saved_solverB_B(:,:),          &
-&                     rhoA_A(:,:), rhoB_B(:,:), rhoB_C(:,:), rhoC_C(:,:),      &
 &                     eta(:,:), u_C(:,:), w_A(:,:),      &
 &                     ra(:), rcuva(:), za(:), exner(:), rho(:),                &
 &                     bc_init_in(:,:)

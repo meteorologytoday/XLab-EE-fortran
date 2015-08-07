@@ -1,17 +1,3 @@
-subroutine cal_eta(rchi, eta)
-implicit none
-real(4) :: rchi(nr,nz), eta(nr-1,nz)
-integer :: i,j
-
-call d_rcuvdr_O2A(rchi, eta)
-
-do i=1,nr-1
-    do j=1,nz
-        eta(i,j) = eta(i,j) * g0 / (rho(j) * Cp * exner(j) * theta0)
-    end do
-end do
-end subroutine
-
 subroutine cal_uw(from_rpsi, to_u, to_w)
 implicit none
 real(4) :: from_rpsi(nr,nz), to_w(nr-1,nz), to_u(nr,nz-1)
@@ -37,5 +23,26 @@ do i=1,nr
         end if
     end do
 end do
+end subroutine
+
+subroutine cyl_ABC_to_m2theta(rhoA_sA, rhoB_B, rhoC_sC, m2, theta)
+implicit none
+real(4) :: rhoA_sA(nr-1, nz-2), rhoB_B(nr-1, nz-1), rhoC_sC(nr-2, nz-1), &
+    &      m2_B(nr-1, nz-1), theta_B(nr-1, nz-1)
+
+integer :: i, j
+
+! invert m2 
+do i=1, nr-1
+    do j=1, nz-1
+        if(i == 1 .and. j == 1) then
+            m2(i,j) = 0.0
+        end if
+        else
+    end do
+end do
+
 
 end subroutine
+
+

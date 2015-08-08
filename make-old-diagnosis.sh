@@ -8,5 +8,6 @@ SRCFLD=./src/old-diagnose
 mkdir ./bin
 
 $FC ${SRCFLD}/diagnose.f90 ${SRCFLD}/xtt-lib/* -o ./bin/$OUTFILE
-rm *.mod
+$FC ${SRCFLD}/diagnose.f90 ${SRCFLD}/xtt-lib/* -o ./bin/$OUTFILE
 
+rm *.mod

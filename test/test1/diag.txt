@@ -1,4 +1,4 @@
-CYLINDRICAL-DENSITY_NORMAL-BAROTROPIC   // geometry-density-operator_complexity
+DYNAMIC_EFFICIENCY-CYLINDRICAL-DENSITY_NORMAL-BAROTROPIC   // geometry-density-operator_complexity
 0.000000 1.000000 0.000000 1.000000 // domain size
 200 200 // grid points
 .    // input folder
@@ -6,6 +6,5 @@ CYLINDRICAL-DENSITY_NORMAL-BAROTROPIC   // geometry-density-operator_complexity
 A.bin    // file: A
 B.bin    // file: B
 C.bin    // file: C
-forcing.bin    // file: forcing
 bc_init.bin    // file: boundary condition and initial guess
 0.005000 0.005000 100000 1.000000 // rchi solver residue absolute, residue relative, max iteration time, and alpha.

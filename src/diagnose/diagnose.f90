@@ -18,12 +18,14 @@ if(operator_complexity == 0 .or. operator_complexity == 2) then
     if(diag_param == DIAGPARAM_DYNAMIC_EFFICIENCY) then
         call cal_eta(strf, eta)
         call write_2Dfield(11,trim(output_folder)//"/eta-[BAROTROPIC]-A.bin",eta,nr-1,nz)
+        call write_2Dfield(11,trim(output_folder)//"/rchi-[BAROTROPIC]-O.bin",strf,nr,nz)
     else if(diag_param == DIAGPARAM_SECONDARY_CIRCULATION) then
         call cal_uw(strf, u_C, w_A)
         call write_2Dfield(11,trim(output_folder)//"/w-[BAROTROPIC]-A.bin",w_A,nr-1,nz)
         call write_2Dfield(11,trim(output_folder)//"/u-[BAROTROPIC]-C.bin",u_C,nr,nz-1)
+        call write_2Dfield(11,trim(output_folder)//"/rpsi-[BAROTROPIC]-O.bin",strf,nr,nz)
     end if
-    call write_2Dfield(11,trim(output_folder)//"/strf-[BAROTROPIC]-O.bin",strf,nr,nz)
+
 end if
 
 if(operator_complexity == 1 .or. operator_complexity == 2) then
@@ -43,12 +45,11 @@ if(operator_complexity == 1 .or. operator_complexity == 2) then
     if(diag_param == DIAGPARAM_DYNAMIC_EFFICIENCY) then
         call cal_eta(strf, eta)
         call write_2Dfield(11,trim(output_folder)//"/eta-[BAROCLINIC]-A.bin",eta,nr-1,nz)
+        call write_2Dfield(11,trim(output_folder)//"/rchi-[BAROTROPIC]-O.bin",strf,nr,nz)
     else if(diag_param == DIAGPARAM_SECONDARY_CIRCULATION) then
         call cal_uw(strf, u_C, w_A)
         call write_2Dfield(11,trim(output_folder)//"/w-[BAROCLINIC]-A.bin",w_A,nr-1,nz)
         call write_2Dfield(11,trim(output_folder)//"/u-[BAROCLINIC]-C.bin",u_C,nr,nz-1)
+        call write_2Dfield(11,trim(output_folder)//"/rpsi-[BAROTROPIC]-O.bin",strf,nr,nz)
     end if
-
-    call write_2Dfield(11,trim(output_folder)//"/strf-[BAROCLINIC]-O.bin",strf,nr,nz)
-
 end if

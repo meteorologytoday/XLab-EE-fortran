@@ -81,7 +81,9 @@ call read_input(stdin, output_folder);
 call read_input(stdin, A_file);
 call read_input(stdin, B_file);
 call read_input(stdin, C_file);
-call read_input(stdin, forcing_file);
+if (diag_param == DIAGPARAM_SECONDARY_CIRCULATION) then
+    call read_input(stdin, forcing_file);
+end if
 call read_input(stdin, bc_init_file);
 call read_input(stdin, buffer);
 read(buffer, *) saved_strategy_strf_r1, saved_strategy_strf_r2, saved_max_iter_strf, alpha_strf;
@@ -102,13 +104,15 @@ else if(geometry == SPHERICAL_MODE) then
 end if
 
 print *, "nr:", nr, ", nz:", nz
-print *, "Input folder: ", trim(input_folder)
+print *, "Input folder:  ", trim(input_folder)
 print *, "Output folder: ", trim(output_folder)
-print *, "A file:       ", trim(A_file)
-print *, "B file:       ", trim(B_file)
-print *, "C file:       ", trim(C_file)
-print *, "forcing file: ", trim(forcing_file)
-print *, "bc_init file: ", trim(bc_init_file)
+print *, "A file:        ", trim(A_file)
+print *, "B file:        ", trim(B_file)
+print *, "C file:        ", trim(C_file)
+if (diag_param == DIAGPARAM_SECONDARY_CIRCULATION) then
+    print *, "forcing file:  ", trim(forcing_file)
+end if
+print *, "bc_init file:  ", trim(bc_init_file)
 print *, "absolute, relative residue, iter: ", saved_strategy_strf_r1, &
 &       saved_strategy_strf_r1, saved_max_iter_strf, alpha_strf
 print *, "--------------------------"

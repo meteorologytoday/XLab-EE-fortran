@@ -40,7 +40,8 @@ def writeDiagnoseFile(file_path, setting):
 		diag_file.write('%s    // file: A\n' % setting['A_FILE']);
 		diag_file.write('%s    // file: B\n' % setting['B_FILE']);
 		diag_file.write('%s    // file: C\n' % setting['C_FILE']);
-		diag_file.write('%s    // file: forcing\n' % setting['FORCING_FILE']);
+		if setting['TYPE'] == eeenum.TYPE.SECONDARY_CIRCULATION:
+			diag_file.write('%s    // file: forcing\n' % setting['FORCING_FILE']);
 		diag_file.write('%s    // file: boundary condition and initial guess\n' % setting['BC_INIT_FILE']);
 		diag_file.write('%f %f %d %f // rchi solver residue absolute, residue relative, max iteration time, and alpha.\n' % (setting['RESIDUE_CRITERIA']['absolute'],setting['RESIDUE_CRITERIA']['relative'],setting['RESIDUE_CRITERIA']['max_iteration'],setting['RESIDUE_CRITERIA']['alpha']));
 	except IOError:

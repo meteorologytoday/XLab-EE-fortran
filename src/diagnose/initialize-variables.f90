@@ -33,8 +33,13 @@ print *, "Allocation complete."
 call read_2Dfield(15, trim(input_folder)//"/"//A_file, rhoA_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//B_file, rhoB_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//C_file, rhoC_in, nr, nz)
-call read_2Dfield(15, trim(input_folder)//"/"//forcing_file, forcing_in, nr, nz)
 call read_2Dfield(15, trim(input_folder)//"/"//bc_init_file, bc_init_in, nr, nz)
+
+if(diag_param == DIAGPARAM_SECONDARY_CIRCULATION) then
+    call read_2Dfield(15, trim(input_folder)//"/"//forcing_file, forcing_in, nr, nz)
+else if(diag_param == DIAGPARAM_DYNAMIC_EFFICIENCY) then
+    forcing_in = - rhoB_in;
+end if
 
 ! ### Calculate dr, dz, dlat, ra, rcuva, za, exner, rho (pseudo-density)
 dr = (Lr(2) - Lr(1)) / (nr-1); dz = (Lz(2) - Lz(1)) / (nz-1);

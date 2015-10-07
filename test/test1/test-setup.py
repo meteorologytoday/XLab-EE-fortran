@@ -9,6 +9,8 @@
  all with constant A, C and with B = 0
 
 """
+
+import sys, os;
 sys.path.append(os.path.realpath('../../xtt-lib-python'));
 
 import numpy as np;
@@ -22,6 +24,7 @@ r_vec   = np.linspace(Lr[0], Lr[1], nr);
 z_vec   = np.linspace(Lz[0], Lz[1], nz);
 
 setting_opt = {
+		'TYPE': eeenum.TYPE.DYNAMIC_EFFICIENCY,#SECONDARY_CIRCULATION,
 		'GEOMETRY' : eeenum.GEOMETRY.CYLINDRICAL,
 		'DENSITY'  : eeenum.DENSITY.NORMAL,
 		'OPERATOR_COMPLEXITY' : eeenum.OPERATOR_COMPLEXITY.BAROTROPIC,
@@ -32,12 +35,15 @@ setting_opt = {
 		'A_FILE':'A.bin',
 		'B_FILE':'B.bin',
 		'C_FILE':'C.bin',
+		'FORCING_FILE': 'forcing.bin',
+		'BC_INIT_FILE': 'bc_init.bin',
 		'RESIDUE_CRITERIA' : {'absolute': 5e-3, 'relative': 5e-3, 'alpha': 1.0, 'max_iteration': 100000}
 };
 
 A_fld = np.zeros((nz, nr), dtype=np.float32);
 B_fld = np.zeros((nz, nr), dtype=np.float32);
 C_fld = np.zeros((nz, nr), dtype=np.float32);
+BC_INIT_fld = np.zeros((nz, nr), dtype=np.float32);
 
 A_fld[:,:] = 1.0;
 C_fld[:,:] = 1.0;
@@ -53,4 +59,6 @@ A_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['A_FILE']));
 B_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['B_FILE']));
 C_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['C_FILE']));
 
+B_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['FORCING_FILE']));
+BC_INIT_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['BC_INIT_FILE']));
 WDC.writeDiagnoseFile('diag.txt', setting_opt);

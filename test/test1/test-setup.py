@@ -35,7 +35,6 @@ setting_opt = {
 		'A_FILE':'A.bin',
 		'B_FILE':'B.bin',
 		'C_FILE':'C.bin',
-		'FORCING_FILE': 'forcing.bin',
 		'BC_INIT_FILE': 'bc_init.bin',
 		'RESIDUE_CRITERIA' : {'absolute': 5e-3, 'relative': 5e-3, 'alpha': 1.0, 'max_iteration': 100000}
 };
@@ -58,7 +57,6 @@ for i in range(0, nr):
 A_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['A_FILE']));
 B_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['B_FILE']));
 C_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['C_FILE']));
-
-B_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['FORCING_FILE']));
 BC_INIT_fld.tofile('%s/%s' % (setting_opt['INPUT_FOLDER'], setting_opt['BC_INIT_FILE']));
+
 WDC.writeDiagnoseFile('diag.txt', setting_opt);

@@ -31,20 +31,20 @@ else
 end if
 
 if(word(3) == 'DENSITY_NORMAL') then
-    density_mode = 0
+    density_mode = DENSITY_NORMAL
 else if(word(3) == 'DENSITY_BOUSSINESQ') then
-    density_mode = 1
+    density_mode = DENSITY_BOUSSINESQ
 else
     call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(3)) // "]")
     stop
 end if
 
 if(word(4) == 'BARO_ALL') then
-    operator_complexity = 2
+    operator_complexity = BARO_ALL
 else if(word(4) == 'BAROCLINIC') then
-    operator_complexity = 1
+    operator_complexity = BAROCLINIC
 else if(word(4) == 'BAROTROPIC') then
-    operator_complexity = 0
+    operator_complexity = BAROTROPIC
 else
     call error_msg("INIT", ERROR_INPUT, "Unknown Mode [" // trim(word(4)) // "]" )
     stop
